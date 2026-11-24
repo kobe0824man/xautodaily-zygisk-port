@@ -1,0 +1,7 @@
+cmake_minimum_required(VERSION 3.22.1)
+project(xautodaily_zygisk LANGUAGES CXX)
+add_library(xautodaily_zygisk SHARED zygisk.cpp)
+target_compile_features(xautodaily_zygisk PRIVATE cxx_std_20)
+target_compile_options(xautodaily_zygisk PRIVATE -Wall -Wextra -fvisibility=hidden -fno-rtti)
+target_link_libraries(xautodaily_zygisk PRIVATE log dl)
+set_target_properties(xautodaily_zygisk PROPERTIES OUTPUT_NAME "zygisk")
