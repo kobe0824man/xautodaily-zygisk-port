@@ -1,3 +1,0 @@
-/home/user/build/zygisk/armeabi-v7a/CMakeFiles/xautodaily_zygisk.dir
-/home/user/build/zygisk/armeabi-v7a/CMakeFiles/edit_cache.dir
-/home/user/build/zygisk/armeabi-v7a/CMakeFiles/rebuild_cache.dir
