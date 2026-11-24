@@ -13,7 +13,7 @@
 - Payload FD opened before specialization and exempted from Zygisk's FD closing.
 - Payload staging into app-private code cache.
 - Host LoadedApk class-loader lookup and dispatch to a Java bootstrap entry.
-- The native loader was compiled for both ABIs in the prior build sandbox; its exported `zygisk_module_entry` symbol and ELF architecture were verified.
+- The native loader was compiled successfully in the current build sandbox for both ABIs; `zygisk_module_entry` is exported, and ELF headers verify AArch64 ELF64 plus ARM ELF32.
 
 ## Remaining work — not release-ready
 - Implement `me.teble.xposed.autodaily.zygisk.Bootstrap` in the payload app.
