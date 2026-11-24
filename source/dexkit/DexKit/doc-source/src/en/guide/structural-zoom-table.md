@@ -1,0 +1,496 @@
+# Quick Reference Guide
+
+> This section introduces the structure components of `DexKit` queries. Matcher objects can be
+> recursively nested, and all conditions are optional.
+
+## Query Related
+
+### FindClass
+
+| Field Name         | Type                          | Description                                                                                               |
+|:-------------------|:------------------------------|:----------------------------------------------------------------------------------------------------------|
+| searchPackages     | Collection&lt;String&gt;      | List of package names to search                                                                           |
+| excludePackages    | Collection&lt;String&gt;      | List of excluded package names                                                                            |
+| ignorePackagesCase | Boolean                       | Whether to ignore package name case                                                                       |
+| searchIn           | Collection&lt;ClassData&gt;   | Search for classes in the specified list of classes                                                       |
+| findFirst          | Boolean                       | Return the first result found immediately; results are not guaranteed to be unique due to multi-threading |
+| matcher            | [ClassMatcher](#classmatcher) | Matching conditions                                                                                       |
+
+### FindField
+
+| Field Name         | Type                          | Description                                                                                               |
+|:-------------------|:------------------------------|:----------------------------------------------------------------------------------------------------------|
+| searchPackages     | Collection&lt;String&gt;      | List of package names to search                                                                           |
+| excludePackages    | Collection&lt;String&gt;      | List of excluded package names                                                                            |
+| ignorePackagesCase | Boolean                       | Whether to ignore package name case                                                                       |
+| searchInClasses    | Collection&lt;ClassData&gt;   | Search for fields in the specified list of classes                                                        |
+| searchInFields     | Collection&lt;FieldData&gt;   | Search for fields in the specified list of fields                                                         |
+| findFirst          | Boolean                       | Return the first result found immediately; results are not guaranteed to be unique due to multi-threading |
+| matcher            | [FieldMatcher](#fieldmatcher) | Matching conditions                                                                                       |
+
+### FindMethod
+
+| Field Name         | Type                            | Description                                                                                               |
+|:-------------------|:--------------------------------|:----------------------------------------------------------------------------------------------------------|
+| searchPackages     | Collection&lt;String&gt;        | List of package names to search                                                                           |
+| excludePackages    | Collection&lt;String&gt;        | List of excluded package names                                                                            |
+| ignorePackagesCase | Boolean                         | Whether to ignore package name case                                                                       |
+| searchInClasses    | Collection&lt;ClassData&gt;     | Search for methods in the specified list of classes                                                       |
+| searchInMethods    | Collection&lt;MethodData&gt;    | Search for methods in the specified list of methods                                                       |
+| findFirst          | Boolean                         | Return the first result found immediately; results are not guaranteed to be unique due to multi-threading |
+| matcher            | [MethodMatcher](#methodmatcher) | Matching conditions                                                                                       |
+
+### BatchFindClassUsingStrings
+
+| Field Name         | Type                                                          | Description                                         |
+|:-------------------|:--------------------------------------------------------------|:----------------------------------------------------|
+| searchPackages     | Collection&lt;String&gt;                                      | List of package names to search                     |
+| excludePackages    | Collection&lt;String&gt;                                      | List of excluded package names                      |
+| ignorePackagesCase | Boolean                                                       | Whether to ignore package name case                 |
+| searchIn           | Collection&lt;ClassData&gt;                                   | Search for classes in the specified list of classes |
+| matchers           | Collection&lt;[StringMatchersGroup](#stringmatchersgroup)&gt; | List of query groups using strings                  |
+
+### BatchFindMethodUsingStrings
+
+| Field Name         | Type                                                          | Description                                         |
+|:-------------------|:--------------------------------------------------------------|:----------------------------------------------------|
+| searchPackages     | Collection&lt;String&gt;                                      | List of package names to search                     |
+| excludePackages    | Collection&lt;String&gt;                                      | List of excluded package names                      |
+| ignorePackagesCase | Boolean                                                       | Whether to ignore package name case                 |
+| searchInClasses    | Collection&lt;ClassData&gt;                                   | Search for methods in the specified list of classes |
+| searchInMethods    | Collection&lt;MethodData&gt;                                  | Search for methods in the specified list of methods |
+| matchers           | Collection&lt;[StringMatchersGroup](#stringmatchersgroup)&gt; | List of query groups using strings                  |
+
+## Matcher Related
+
+### AccessFlagsMatcher
+
+| Field Name | Type | Description |
+|:-----------|:-----|:------------|
+| modifiers | Int | Bit mask interpreted by the owning matcher condition |
+| matchType | [MatchType](#matchtype) | Matching mode |
+
+`ClassMatcher`, `MethodMatcher`, `FieldMatcher`, and `UsingFieldMatcher` accept this matcher
+through two independent conditions:
+
+- `modifiers`: Android Java reflection semantics, including hidden Java bits such as `BRIDGE`,
+  `VARARGS`, and `SYNTHETIC`. Use `Modifier` for reflection conditions.
+- `accessFlags`: raw DEX [`access_flags`](https://source.android.com/docs/core/runtime/dex-format#access-flags).
+  Use `DexAccessFlags` for DEX-only flags such as `CONSTRUCTOR` and `DECLARED_SYNCHRONIZED`.
+
+Both conditions can be set together and are combined with AND. `Contains` requires every requested
+bit; `Equals` compares the whole value. As before, the mask must be nonzero.
+`ClassData`, `MethodData`, and `FieldData` expose the same two views as `modifiers` and `accessFlags`.
+
+For methods, reflection removes DEX-only high bits and maps `DECLARED_SYNCHRONIZED` (`0x20000`)
+to `SYNCHRONIZED` (`0x20`). As in Android reflection, a native method carrying only raw `0x20`
+does not retain that bit in `modifiers`; inspect `accessFlags` when this distinction matters.
+For classes, reflection uses the `InnerClass` annotation's flags when present, including
+`PRIVATE`, `PROTECTED`, and `STATIC`; raw flags still come from `class_def_item`.
+Metadata that is absent from the loaded DEX cannot be recovered through reflection normalization.
+
+### AnnotationEncodeValueMatcher
+
+| Field Name      | Type                                                          | Description                    |
+|:----------------|:--------------------------------------------------------------|:-------------------------------|
+| byteValue       | Byte                                                          | Matched byte                   |
+| shortValue      | Short                                                         | Matched short integer          |
+| charValue       | Char                                                          | Matched character              |
+| intValue        | Int                                                           | Matched integer                |
+| longValue       | Long                                                          | Matched long integer           |
+| floatValue      | Float                                                         | Matched float                  |
+| doubleValue     | Double                                                        | Matched double precision float |
+| stringValue     | [StringMatcher](#stringmatcher)                               | Matched string                 |
+| methodValue     | [MethodMatcher](#methodmatcher)                               | Matched method                 |
+| enumValue       | [FieldMatcher](#fieldmatcher)                                 | Matched enumeration            |
+| arrayValue      | [AnnotationEncodeArrayMatcher](#annotationencodearraymatcher) | Matched array                  |
+| annotationValue | [AnnotationMatcher](#annotationmatcher)                       | Matched annotation             |
+| nullValue       | None                                                          | Match `null`                   |
+| boolValue       | Boolean                                                       | Matched boolean                |
+
+### IntRange
+
+| Field Name | Type | Description                               |
+|:-----------|:-----|:------------------------------------------|
+| min        | Int  | Minimum value, default is `0`             |
+| max        | Int  | Maximum value, default is `Int.MAX_VALUE` |
+
+### NumberEncodeValueMatcher
+
+| Field Name  | Type   | Description                    |
+|:------------|:-------|:-------------------------------|
+| byteValue   | Byte   | Matched byte                   |
+| shortValue  | Short  | Matched short integer          |
+| charValue   | Char   | Matched character              |
+| intValue    | Int    | Matched integer                |
+| longValue   | Long   | Matched long integer           |
+| floatValue  | Float  | Matched float                  |
+| doubleValue | Double | Matched double precision float |
+
+### OpcodesMatcher
+
+| Field Name | Type                                | Description                                    |
+|:-----------|:------------------------------------|:-----------------------------------------------|
+| opCodes    | Collection&lt;Int&gt;               | Matched Int values of opcodes                  |
+| opNames    | Collection&lt;String&gt;            | Matched names of opcodes (as per smali syntax) |
+| matchType  | [OpCodeMatchType](#opcodematchtype) | Matching mode                                  |
+| size       | [IntRange](#intrange)               | Total length range of the opcode               |
+
+### StringMatcher
+
+| Field Name | Type                                | Description             |
+|:-----------|:------------------------------------|:------------------------|
+| value      | String                              | Matched string          |
+| matchType  | [StringMatchType](#stringmatchtype) | Matching mode           |
+| ignoreCase | Boolean                             | Ignore case sensitivity |
+
+### TargetElementTypesMatcher
+
+| Field Name | Type                                                      | Description                              |
+|:-----------|:----------------------------------------------------------|:-----------------------------------------|
+| types      | Collection&lt;[TargetElementType](#targetelementtype)&gt; | List of matched annotation element types |
+| matchType  | [MatchType](#matchtype)                                   | Matching mode                            |
+
+### AnnotationElementMatcher
+
+| Field Name | Type                                                          | Description   |
+|:-----------|:--------------------------------------------------------------|:--------------|
+| name       | [StringMatcher](#stringmatcher)                               | Matched name  |
+| value      | [AnnotationEncodeValueMatcher](#annotationencodevaluematcher) | Matched value |
+
+### AnnotationElementsMatcher
+
+| Field Name | Type                                                                    | Description                         |
+|:-----------|:------------------------------------------------------------------------|:------------------------------------|
+| elements   | Collection&lt;[AnnotationElementMatcher](#annotationelementmatcher)&gt; | List of matched annotation elements |
+| matchType  | [MatchType](#matchtype)                                                 | Matching mode                       |
+| count      | [IntRange](#intrange)                                                   | Number of matched elements          |
+
+### AnnotationEncodeArrayMatcher
+
+| Field Name | Type                                                                            | Description                         |
+|:-----------|:--------------------------------------------------------------------------------|:------------------------------------|
+| values     | Collection&lt;[AnnotationEncodeValueMatcher](#annotationencodevaluematcher)&gt; | List of matched annotation elements |
+| matchType  | [MatchType](#matchtype)                                                         | Matching mode                       |
+| count      | [IntRange](#intrange)                                                           | Number of matched elements          |
+
+### AnnotationMatcher
+
+| Field Name         | Type                                                    | Description                              |
+|:-------------------|:--------------------------------------------------------|:-----------------------------------------|
+| type               | [ClassMatcher](#classmatcher)                           | Matched annotation type                  |
+| targetElementTypes | [TargetElementTypesMatcher](#targetelementtypesmatcher) | List of matched annotation element types |
+| policy             | [RetentionPolicyType](#retentionpolicytype)             | Matched retention policy                 |
+| elements           | [AnnotationElementsMatcher](#annotationelementsmatcher) | List of matched annotation elements      |
+| usingStrings       | Collection&lt;[StringMatcher](#stringmatcher)&gt;       | List of strings used in the annotation   |
+
+### AnnotationsMatcher
+
+| Field Name  | Type                                                      | Description                   |
+|:------------|:----------------------------------------------------------|:------------------------------|
+| annotations | Collection&lt;[AnnotationMatcher](#annotationmatcher)&gt; | List of matched annotations   |
+| matchType   | [MatchType](#matchtype)                                   | Matching mode                 |
+| count       | [IntRange](#intrange)                                     | Number of matched annotations |
+
+### ClassMatcher
+
+| Field Name   | Type                                              | Description                                                   |
+|:-------------|:--------------------------------------------------|:--------------------------------------------------------------|
+| source       | [StringMatcher](#stringmatcher)                   | Source file name of the class, i.e., `.source` field in smali |
+| className    | [StringMatcher](#stringmatcher)                   | Name of the class                                             |
+| modifiers    | [AccessFlagsMatcher](#accessflagsmatcher)         | Java reflection class modifiers                                    |
+| accessFlags    | [AccessFlagsMatcher](#accessflagsmatcher)         | Raw DEX class access flags                                    |
+| superClass   | [ClassMatcher](#classmatcher)                     | Superclass of the class                                       |
+| interfaces   | [InterfacesMatcher](#interfacesmatcher)           | List of interfaces implemented by the class                   |
+| annotations  | [AnnotationsMatcher](#annotationsmatcher)         | List of annotations for the class                             |
+| fields       | [FieldsMatcher](#fieldsmatcher)                   | List of fields in the class                                   |
+| methods      | [MethodsMatcher](#methodsmatcher)                 | List of methods in the class                                  |
+| usingStrings | Collection&lt;[StringMatcher](#stringmatcher)&gt; | List of strings used in the class                             |
+| allOf        | Collection&lt;[ClassMatcher](#classmatcher)&gt;   | Child class matchers that must all match                      |
+| anyOf        | Collection&lt;[ClassMatcher](#classmatcher)&gt;   | Child class matchers where at least one must match            |
+| noneOf       | Collection&lt;[ClassMatcher](#classmatcher)&gt;   | Child class matchers that must not match                      |
+
+### InterfacesMatcher
+
+| Field Name | Type                                            | Description                  |
+|:-----------|:------------------------------------------------|:-----------------------------|
+| interfaces | Collection&lt;[ClassMatcher](#classmatcher)&gt; | List of matched interfaces   |
+| matchType  | [MatchType](#matchtype)                         | Matching mode                |
+| count      | [IntRange](#intrange)                           | Number of matched interfaces |
+
+### FieldMatcher
+
+| Field Name    | Type                                      | Description                        |
+|:--------------|:------------------------------------------|:-----------------------------------|
+| name          | [StringMatcher](#stringmatcher)           | Name of the field                  |
+| modifiers     | [AccessFlagsMatcher](#accessflagsmatcher) | Java reflection field modifiers          |
+| accessFlags     | [AccessFlagsMatcher](#accessflagsmatcher) | Raw DEX field access flags          |
+| declaredClass | [ClassMatcher](#classmatcher)             | Declaring class of the field       |
+| type          | [ClassMatcher](#classmatcher)             | Type of the field                  |
+| annotations   | [AnnotationsMatcher](#annotationsmatcher) | List of annotations for the field  |
+| readMethods   | [MethodsMatcher](#methodsmatcher)         | List of methods to read the field  |
+| writeMethods  | [MethodsMatcher](#methodsmatcher)         | List of methods to write the field |
+| allOf         | Collection&lt;[FieldMatcher](#fieldmatcher)&gt; | Child field matchers that must all match |
+| anyOf         | Collection&lt;[FieldMatcher](#fieldmatcher)&gt; | Child field matchers where at least one must match |
+| noneOf        | Collection&lt;[FieldMatcher](#fieldmatcher)&gt; | Child field matchers that must not match |
+
+### FieldsMatcher
+
+| Field Name | Type                                            | Description              |
+|:-----------|:------------------------------------------------|:-------------------------|
+| fields     | Collection&lt;[FieldMatcher](#fieldmatcher)&gt; | List of matched fields   |
+| matchType  | [MatchType](#matchtype)                         | Matching mode            |
+| count      | [IntRange](#intrange)                           | Number of matched fields |
+
+### MethodMatcher
+
+| Field Name    | Type                                                      | Description                           |
+|:--------------|:----------------------------------------------------------|:--------------------------------------|
+| name          | [StringMatcher](#stringmatcher)                           | Name of the method                    |
+| modifiers     | [AccessFlagsMatcher](#accessflagsmatcher)                 | Java reflection method modifiers            |
+| accessFlags     | [AccessFlagsMatcher](#accessflagsmatcher)                 | Raw DEX method access flags            |
+| declaredClass | [ClassMatcher](#classmatcher)                             | Declaring class of the method         |
+| protoShorty   | String                                                    | The method prototype shorty           |
+| returnType    | [ClassMatcher](#classmatcher)                             | Return type of the method             |
+| params        | [ParametersMatcher](#parametersmatcher)                   | List of parameters                    |
+| annotations   | [AnnotationsMatcher](#annotationsmatcher)                 | List of annotations for the method    |
+| opCodes       | [OpcodesMatcher](#opcodesmatcher)                         | List of opcodes for the method        |
+| usingStrings  | Collection&lt;[StringMatcher](#stringmatcher)&gt;         | List of strings used in the method    |
+| usingFields   | Collection&lt;[UsingFieldMatcher](#usingfieldmatcher)&gt; | List of fields used in the method     |
+| usingNumbers  | Collection&lt;Number&gt;                                  | List of numbers used in the method    |
+| invokeMethods | [MethodsMatcher](#methodsmatcher)                         | List of methods invoked by the method |
+| callerMethods | [MethodsMatcher](#methodsmatcher)                         | List of methods that call the method  |
+| allOf         | Collection&lt;[MethodMatcher](#methodmatcher)&gt;         | Child method matchers that must all match |
+| anyOf         | Collection&lt;[MethodMatcher](#methodmatcher)&gt;         | Child method matchers where at least one must match |
+| noneOf        | Collection&lt;[MethodMatcher](#methodmatcher)&gt;         | Child method matchers that must not match |
+
+::: tip
+`not { ... }` is DSL syntax sugar rather than a standalone field; it is converted into adding one
+child matcher to `noneOf`. `allOf`, `anyOf`, and `noneOf` can be nested recursively.
+:::
+
+`usingNumbers` compares integer arguments by exact signed value across integer widths.
+Floating arguments interpret the restored 32/64-bit `const*` patterns as `float`/`double`,
+including short encodings of zero, with an absolute tolerance of less than `1e-6`.
+Arithmetic `lit8`/`lit16` operands only match integer arguments. Same-sign infinities
+and signed zeros compare equal; NaN never matches. Source-language types are not inferred.
+
+### MethodsMatcher
+
+| Field Name | Type                                              | Description               |
+|:-----------|:--------------------------------------------------|:--------------------------|
+| methods    | Collection&lt;[MethodMatcher](#methodmatcher)&gt; | List of matched methods   |
+| matchType  | [MatchType](#matchtype)                           | Matching mode             |
+| count      | [IntRange](#intrange)                             | Number of matched methods |
+
+### ParameterMatcher
+
+| Field Name  | Type                                      | Description                           |
+|:------------|:------------------------------------------|:--------------------------------------|
+| type        | [ClassMatcher](#classmatcher)             | Type of the parameter                 |
+| annotations | [AnnotationsMatcher](#annotationsmatcher) | List of annotations for the parameter |
+
+### ParametersMatcher
+
+| Field Name | Type                                                    | Description                  |
+|:-----------|:--------------------------------------------------------|:-----------------------------|
+| params     | Collection&lt;[ParameterMatcher](#parametermatcher)&gt; | List of matched parameters   |
+| count      | [IntRange](#intrange)                                   | Number of matched parameters |
+
+### StringMatchersGroup
+
+| Field Name | Type                                              | Description                       |
+|:-----------|:--------------------------------------------------|:----------------------------------|
+| groupName  | String                                            | Group name for the query          |
+| matchers   | Collection&lt;[StringMatcher](#stringmatcher)&gt; | List of strings used in the query |
+
+### UsingFieldMatcher
+
+| Field Name  | Type                                      | Description                                  |
+|:------------|:------------------------------------------|:---------------------------------------------|
+| field       | [FieldMatcher](#fieldmatcher)              | Matched field                                |
+| modifiers   | [AccessFlagsMatcher](#accessflagsmatcher)  | Java reflection modifiers of the used field  |
+| accessFlags | [AccessFlagsMatcher](#accessflagsmatcher)  | Raw DEX access flags of the used field       |
+| usingType   | [UsingType](#usingtype)                    | Type of usage                                |
+
+`modifiers` and `accessFlags` are convenience setters on the inner `FieldMatcher`. Assign an
+`Int` directly or call the overload accepting an `AccessFlagsMatcher`. Both conditions can
+be set together and are combined with AND.
+
+### EncodeValueByte
+
+| Field Name | Type | Description |
+|:-----------|:-----|:------------|
+| value      | Byte | byte value  |
+
+### EncodeValueShort
+
+| Field Name | Type  | Description         |
+|:-----------|:------|:--------------------|
+| value      | Short | short integer value |
+
+### EncodeValueChar
+
+| Field Name | Type | Description     |
+|:-----------|:-----|:----------------|
+| value      | Char | character value |
+
+### EncodeValueInt
+
+| Field Name | Type | Description   |
+|:-----------|:-----|:--------------|
+| value      | Int  | integer value |
+
+### EncodeValueLong
+
+| Field Name | Type | Description        |
+|:-----------|:-----|:-------------------|
+| value      | Long | long integer value |
+
+### EncodeValueFloat
+
+| Field Name | Type  | Description |
+|:-----------|:------|:------------|
+| value      | Float | float value |
+
+### EncodeValueDouble
+
+| Field Name | Type   | Description  |
+|:-----------|:-------|:-------------|
+| value      | Double | double value |
+
+### EncodeValueString
+
+| Field Name | Type   | Description  |
+|:-----------|:-------|:-------------|
+| value      | String | string value |
+
+### EncodeValueNull
+
+This object has no fields.
+
+### EncodeValueBoolean
+
+| Field Name | Type    | Description   |
+|:-----------|:--------|:--------------|
+| value      | Boolean | boolean value |
+
+## Result Objects
+
+### Access flag properties
+
+These read-only properties are available on `ClassData`, `MethodData`, and `FieldData`:
+
+| Property    | Type | Description |
+|:------------|:-----|:------------|
+| modifiers   | Int  | Android Java reflection modifiers, preserving hidden bits such as `BRIDGE`, `VARARGS`, and `SYNTHETIC` |
+| accessFlags | Int  | Raw DEX access flags, preserving DEX-only bits such as `CONSTRUCTOR` and `DECLARED_SYNCHRONIZED` |
+
+Java callers use `getModifiers()` and `getAccessFlags()`, respectively. Raw class flags come
+from `class_def_item`; class `modifiers` use the `InnerClass` annotation's flags when available.
+See [AccessFlagsMatcher](#accessflagsmatcher) for method normalization rules.
+
+## Enumerations
+
+### AnnotationEncodeValueType
+
+| Field Name      | Type | Description                 |
+|:----------------|:-----|:----------------------------|
+| ByteValue       | Enum | Byte type                   |
+| ShortValue      | Enum | Short integer type          |
+| CharValue       | Enum | Character type              |
+| IntValue        | Enum | Integer type                |
+| LongValue       | Enum | Long integer type           |
+| FloatValue      | Enum | Float type                  |
+| DoubleValue     | Enum | Double precision float type |
+| StringValue     | Enum | String type                 |
+| TypeValue       | Enum | Type type                   |
+| MethodValue     | Enum | Method type                 |
+| EnumValue       | Enum | Enum type                   |
+| ArrayValue      | Enum | Array type                  |
+| AnnotationValue | Enum | Annotation type             |
+| NullValue       | Enum | Null type                   |
+| BoolValue       | Enum | Boolean type                |
+
+### AnnotationVisibilityType
+
+Refer to [Visibility values](https://source.android.com/docs/core/runtime/dex-format#visibility)
+
+| Field Name | Type | Description           |
+|:-----------|:-----|:----------------------|
+| Build      | Enum | Visible at build time |
+| Runtime    | Enum | Visible at runtime    |
+| System     | Enum | Visible to the system |
+
+### MatchType
+
+| Field Name | Type | Description |
+|:-----------|:-----|:------------|
+| Contains   | Enum | Contains    |
+| Equals     | Enum | Equals      |
+
+### NumberEncodeValueType
+
+| Field Name  | Type | Description                 |
+|:------------|:-----|:----------------------------|
+| ByteValue   | Enum | Byte type                   |
+| ShortValue  | Enum | Short integer type          |
+| CharValue   | Enum | Character type              |
+| IntValue    | Enum | Integer type                |
+| LongValue   | Enum | Long integer type           |
+| FloatValue  | Enum | Float type                  |
+| DoubleValue | Enum | Double precision float type |
+
+### OpCodeMatchType
+
+| Field Name | Type | Description |
+|:-----------|:-----|:------------|
+| Contains   | Enum | Contains    |
+| StartsWith | Enum | Starts with |
+| EndsWith   | Enum | Ends with   |
+| Equals     | Enum | Equals      |
+
+### RetentionPolicyType
+
+This Enum corresponds to `java.lang.annotation.RetentionPolicy`.
+
+| Field Name | Type | Description   |
+|:-----------|:-----|:--------------|
+| Source     | Enum | Source level  |
+| Class      | Enum | Class level   |
+| Runtime    | Enum | Runtime level |
+
+### StringMatchType
+
+| Field Name   | Type | Description                                     |
+|:-------------|:-----|:------------------------------------------------|
+| Contains     | Enum | Contains                                        |
+| StartsWith   | Enum | Starts with                                     |
+| EndsWith     | Enum | Ends with                                       |
+| SimilarRegex | Enum | Regex-like pattern, supporting only `^` and `$` |
+| Equals       | Enum | Equals                                          |
+
+### TargetElementType
+
+This Enum corresponds to `java.lang.annotation.ElementType`.
+
+| Field Name     | Type | Description     |
+|:---------------|:-----|:----------------|
+| Type           | Enum | Type            |
+| Field          | Enum | Field           |
+| Method         | Enum | Method          |
+| Parameter      | Enum | Parameter       |
+| Constructor    | Enum | Constructor     |
+| LocalVariable  | Enum | Local variable  |
+| AnnotationType | Enum | Annotation type |
+| Package        | Enum | Package         |
+| TypeParameter  | Enum | Type parameter  |
+| TypeUse        | Enum | Type use        |
+
+### UsingType
+
+| Field Name | Type | Description |
+|:-----------|:-----|:------------|
+| Any        | Enum | Any usage   |
+| Get        | Enum | Get usage   |
+| Set        | Enum | Set usage   |

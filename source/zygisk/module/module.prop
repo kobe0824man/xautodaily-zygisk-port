@@ -1,0 +1,6 @@
+id=xautodaily-zygisk
+name=XAutoDaily Zygisk Port
+version=3.1.0-rc6-port
+versionCode=310006
+author=XAutoDaily contributors
+description=Zygisk loader for XAutoDaily QQ/TIM module
