@@ -74,13 +74,15 @@ bash -n "$ROOT/zygisk/build-zygisk.sh"
 bash -n "$ROOT/zygisk/build-native.sh"
 DUMMY="$OUT/dummy.apk"
 printf 'not-an-apk' > "$DUMMY"
-if PAYLOAD_APK="" bash "$ROOT/zygisk/build-zygisk.sh" >/dev/null 2>&1; then
+if PAYLOAD_APK="" SUPPORT_APK="$DUMMY" bash "$ROOT/zygisk/build-zygisk.sh" >/dev/null 2>&1; then
   echo "FAIL: a missing payload was accepted" >&2; exit 1
 fi
-if PAYLOAD_APK="$DUMMY" PAYLOAD_KIND=bogus bash "$ROOT/zygisk/build-zygisk.sh" >/dev/null 2>&1; then
+if PAYLOAD_APK="$DUMMY" SUPPORT_APK="$DUMMY" PAYLOAD_KIND=bogus \
+    bash "$ROOT/zygisk/build-zygisk.sh" >/dev/null 2>&1; then
   echo "FAIL: an unknown payload kind was accepted" >&2; exit 1
 fi
-if PAYLOAD_APK="$DUMMY" PAYLOAD_KIND=original bash "$ROOT/zygisk/build-zygisk.sh" >/dev/null 2>&1; then
+if PAYLOAD_APK="$DUMMY" SUPPORT_APK="$DUMMY" PAYLOAD_KIND=original \
+    bash "$ROOT/zygisk/build-zygisk.sh" >/dev/null 2>&1; then
   echo "FAIL: a mislabelled original payload was accepted" >&2; exit 1
 fi
 echo "packaging refusals OK"

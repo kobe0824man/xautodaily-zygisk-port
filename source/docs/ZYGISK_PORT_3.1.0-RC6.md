@@ -34,7 +34,7 @@
 - **Local build limitation**: the shell has no Gradle, Android SDK/NDK, CMake or Ninja toolchain, so a local Gradle/JNI build of the app module still cannot be claimed. A JDK 21 and the public `android.jar` are available, which is what made the package-level compile and the unit tests above possible. The GitHub Actions workflow must provide the authoritative full-build result.
 - **CI is blocked at the organisation level**: every workflow run for this repository fails in under two seconds with no runner allocated, no steps and an empty log - including a deliberately trivial `echo` self-check workflow (`.github/workflows/actions-selfcheck.yml`). The failure is therefore not caused by the port's workflow or sources: GitHub Actions cannot start any job for `productos-agents` right now (an organisation billing/quota condition that the repository owner has to resolve). Nothing about the port can be validated on CI until that is fixed.
 - **Device test**: no rooted Android device or emulator with QQ/TIM has been used. The new `handleBindApplication` timing, ART symbol resolver, constructor original-call path, Tinker loader update, native dependencies, and both ABIs remain unverified at runtime.
-- **Original APK bytes**: the chat attachment is still not in the remote ProductOS project. The source-rebuild CI candidate is a newly built debug APK, not the uploaded APK and not byte-identical to it. No final ZIP containing the original APK has been produced or claimed.
+- **Original APK bytes**: the exact APK is stored remotely at `public/payloads/xautodaily/XAutoDaily_3.1.0-rc6.apk`; a fresh download measured 9,581,427 bytes and SHA-256 `2d337bb750d0187d6e6eb06fa0429bd3e37b0f2841b904f6d01d08c6886413df`. It is byte-identical to the supplied attachment. However, it predates the port's Bootstrap/BindApplicationHook/HostClassLoaderBridge/HookRuntime/XposedHooker/NativeLoader classes. The packager now rejects it as a runtime payload even with a matching hash; only the source-rebuilt APK can run this Java bridge. No installable ZIP has been produced.
 
 ## Explicitly incomplete
 
@@ -42,6 +42,6 @@
 - `XposedBridge.setObjectClass` and `cloneToSubclass` native behavior (explicitly fail as unsupported).
 - Device-verified constructor `invokeOriginalMethod` behavior and complete compatibility with every API-82 edge case.
 - Android-version/ABI matrix tests, QQ/TIM startup stability, hook coverage, and Tinker runtime validation.
-- Original-APK embedding and an installable ZIP based on the exact uploaded bytes.
+- A working runtime based on the exact original APK bytes: that APK does not contain the new Java bridge classes, and the current port does not inject a separate DEX overlay. The exact original is archived in ProductOS storage but is not a runnable payload.
 
 The implementation is a substantial port in progress, not a completed or device-validated replacement for the LSPosed module.

@@ -3,10 +3,10 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 MODULE="$ROOT/zygisk/module"
-PAYLOAD="$(printenv PAYLOAD_APK || true)"
-PAYLOAD_KIND="$(printenv PAYLOAD_KIND || printf 'source-rebuild')"
-SUPPORT_APK="$(printenv SUPPORT_APK || printf '%s' "$PAYLOAD")"
-OUT="$(printenv OUT_ZIP || printf '%s' "$ROOT/../build/XAutoDaily-Zygisk-3.1.0-rc6-$PAYLOAD_KIND.zip")"
+PAYLOAD="${PAYLOAD_APK:-}"
+PAYLOAD_KIND="${PAYLOAD_KIND:-source-rebuild}"
+SUPPORT_APK="${SUPPORT_APK:-$PAYLOAD}"
+OUT="${OUT_ZIP:-$ROOT/../build/XAutoDaily-Zygisk-3.1.0-rc6-$PAYLOAD_KIND.zip}"
 
 if [[ ! -f "$PAYLOAD" ]]; then
   echo "Set PAYLOAD_APK to the payload APK to package; no APK is synthesized by this script." >&2
@@ -49,6 +49,8 @@ for CLASS in Bootstrap BindApplicationHook HostClassLoaderBridge HookRuntime Xpo
 done
 
 "$ROOT/zygisk/build-native.sh"
+# Keep the selected payload byte-for-byte intact. New hook backend libraries are staged
+# separately so the payload APK need not be modified to add the native hook backend.
 rm -rf "$MODULE/native-libs"
 for ABI in arm64-v8a armeabi-v7a; do
   mkdir -p "$MODULE/native-libs/$ABI"
