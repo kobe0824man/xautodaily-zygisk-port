@@ -57,7 +57,7 @@ val updateLog = """
 """.trimIndent()
 
 licenses {
-    additionalProjects(":dexkit", ":mmkv", ":stub", ":system")
+    additionalProjects(":dexkit", ":mmkv", ":stub", ":system", ":xposed-api82")
     reports {
         html.enabled = false
         json {
@@ -387,7 +387,15 @@ dependencies {
     implementation(libs.androidx.multidex)
     implementation(libs.hiddenapibypass)
 
-    implementation(libs.api)
+    if (zygiskPortBuild) {
+        // The published `de.robv.android.xposed:api:82` artifact is a compile-time stub whose
+        // method bodies all throw RuntimeException("Stub!"). LSPosed shadows it with the
+        // framework's own implementation, but the Zygisk payload has no framework, so the port
+        // packages the upstream API 82 implementation instead.
+        implementation(project(":xposed-api82"))
+    } else {
+        implementation(libs.api)
+    }
     implementation("org.lsposed.lsplant:lsplant-standalone:6.4")
     implementation(libs.ezxhelper)
     implementation(libs.kotlinx.collections.immutable)
