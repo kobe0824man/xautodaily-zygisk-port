@@ -30,7 +30,7 @@ BRANCH="${BRANCH:-zygisk-port-3.1.0-rc6}"
 VISIBILITY="${VISIBILITY:-private}"
 DRY_RUN="${DRY_RUN:-0}"
 WORKSPACE="${WORKSPACE:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
-API="https://api.github.com"
+API="${GH_API:-https://api.github.com}"
 
 if [[ -z "${GITHUB_PERSONAL_TOKEN:-}" && -f "$WORKSPACE/.env" ]]; then
   GITHUB_PERSONAL_TOKEN="$(sed -n 's/^GITHUB_PERSONAL_TOKEN=//p' "$WORKSPACE/.env" | tail -1)"
@@ -56,8 +56,12 @@ fi
 # GitHub rejects a push that creates or updates a file under .github/workflows when the token
 # lacks the `workflow` scope, and it rejects the whole push rather than the workflow files
 # alone. Check the scopes before pushing so the cause is not buried in a ref update error.
+# The header carries the whole list ("repo, workflow"), so take everything after the colon and
+# drop the spaces GitHub puts after the commas.
 SCOPES="$(curl -sS -m 30 -D - -o /dev/null "${AUTH[@]}" "$API/user" \
-          | tr -d '\r' | awk 'tolower($1) == "x-oauth-scopes:" {print $2}')"
+          | tr -d '\r' \
+          | awk 'tolower($1) == "x-oauth-scopes:" {sub(/^[^:]*:[[:space:]]*/, ""); print; exit}')"
+SCOPES="${SCOPES// /}"
 if [[ -z "$SCOPES" ]]; then
   echo "scopes: not reported (fine-grained token) - the push itself is the only check"
 elif [[ ",$SCOPES," != *",workflow,"* ]]; then
