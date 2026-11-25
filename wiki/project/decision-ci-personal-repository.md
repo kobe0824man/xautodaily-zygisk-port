@@ -36,6 +36,13 @@ that the branch refs and the workflow files landed on the remote. The token need
 scope (create and push) and the `workflow` scope (push `.github/workflows` — GitHub rejects
 workflow updates without it).
 
+The personal repository is **public**, not private. That is deliberate on two counts: public
+repositories draw Actions minutes from an unlimited free pool rather than from an account's
+private-repository allowance, and the ported source is a derivative of the already-public
+upstream XAutoDaily project, so nothing is disclosed that is not already published. The
+organisation repository remains the source of record and keeps the full history; the personal
+repository is the build host.
+
 **What changed in the workflows at the same time** (the build had never executed, so it was
 hardened before its first real run):
 

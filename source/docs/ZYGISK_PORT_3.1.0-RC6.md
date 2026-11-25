@@ -68,6 +68,33 @@
   runner image's toolchain, the job timeout is 120 minutes for the cold SDK/NDK download and the
   two-ABI native build, and superseded runs on the same ref are cancelled.
 
+- **First-run preflight audit** (done before the first real run, because no job had ever executed):
+  every version the Gradle build asks for is already installed by the workflow, and every path the
+  workflow asserts on is the path the build actually produces.
+  - `source/gradle/libs.versions.toml` pins `compileSdk = 36`, `buildTool = 36.0.0`,
+    `ndk = 27.0.12077973` and `jvm-target = 21`; the workflow installs exactly
+    `platforms;android-36`, `build-tools;36.0.0`, `ndk;27.0.12077973`, `cmake;3.22.1` and JDK 21.
+    AGP 8.9.2 with Gradle 8.14 satisfies the AGP minimum of 8.11.1, and
+    `android.suppressUnsupportedCompileSdk=36` keeps the SDK warning out of the build.
+  - The app module declares no product flavours, so the debug APK really is at
+    `source/app/build/outputs/apk/debug/app-debug.apk`, which is the path the workflow hashes and
+    the path `build-zygisk.sh` is handed as `PAYLOAD_APK`.
+  - `libdobby.so` lands in the APK because Dobby is added with `add_library(dobby SHARED ...)`;
+    `liblsplant.so` arrives as a Prefab `.so` from `org.lsposed.lsplant:lsplant-standalone:6.4`;
+    `libxautodaily_hook.so` is a CMake target of the app itself. All three per ABI are therefore
+    present for the packager to extract and for the ELF verification step to find.
+  - The Zygisk loader exports `zygisk_module_entry` with C linkage and default visibility: the
+    vendored `zygisk.hpp` declares it inside an `extern "C"` block with
+    `[[gnu::visibility("default")]]`, and that declaration precedes the `REGISTER_ZYGISK_MODULE`
+    expansion, so the `-fvisibility=hidden` compile flag does not hide the entry point from
+    `dlsym` or from `nm -D`.
+  - The Gradle build's CMake path adds `source/zygisk/third_party/Dobby` as a subdirectory, so the
+    `submodules: recursive` checkout in the workflow is a hard requirement, not a convenience.
+  - The source-level suite was re-run locally on this exact tree: package compile, 7 unit tests,
+    the vendored API 82 compile, the 10-method JNI table, the vendored-tree provenance check, the
+    pinned OpenSSL blob hashes, the native bridge against the pinned LSPlant/Dobby headers and the
+    packaging refusals all pass.
+
 - **Device test**: no rooted Android device or emulator with QQ/TIM has been used. The new `handleBindApplication` timing, ART symbol resolver, constructor original-call path, Tinker loader update, native dependencies, and both ABIs remain unverified at runtime.
 - **Original APK bytes**: the exact APK is stored remotely at `public/payloads/xautodaily/XAutoDaily_3.1.0-rc6.apk`; a fresh download measured 9,581,427 bytes and SHA-256 `2d337bb750d0187d6e6eb06fa0429bd3e37b0f2841b904f6d01d08c6886413df`. It is byte-identical to the supplied attachment. However, it predates the port's Bootstrap/BindApplicationHook/HostClassLoaderBridge/HookRuntime/XposedHooker/NativeLoader classes. The packager now rejects it as a runtime payload even with a matching hash; only the source-rebuilt APK can run this Java bridge. No installable ZIP has been produced.
 
