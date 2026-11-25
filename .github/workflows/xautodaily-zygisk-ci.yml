@@ -49,7 +49,7 @@ jobs:
       - name: Verify pinned OpenSSL archives
         run: python3 source/zygisk/tests/verify_openssl_archives.py
 
-      - name: Source-level verification (compile, unit tests, API 82 table, packaging refusals)
+      - name: Source-level verification (compile, unit tests, API 82 table, native API, packaging refusals)
         run: |
           export ANDROID_JAR="$ANDROID_HOME/platforms/android-36/android.jar"
           bash source/zygisk/tests/verify_local_port.sh

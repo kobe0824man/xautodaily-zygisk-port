@@ -10,7 +10,8 @@
 #   4. the JNI registration table matches the API 82 native declarations,
 #   5. the vendored API 82 tree matches the pinned upstream sources,
 #   6. the pinned OpenSSL static archives still match their upstream Git blob IDs,
-#   7. the packaging scripts refuse a missing/invalid payload.
+#   7. the native bridge calls the pinned LSPlant and Dobby APIs with the right argument types,
+#   8. the packaging scripts refuse a missing/invalid payload.
 #
 # Requirements: JAVA_HOME (JDK 17+), ANDROID_JAR (platform android.jar), and network access for the
 # pinned API 82 source JAR unless API82_SOURCES_JAR points at a local copy.
@@ -69,7 +70,10 @@ python3 "$ROOT/zygisk/tests/verify_xposed_api82.py" \
 echo "== 6. pinned OpenSSL archives =="
 python3 "$ROOT/zygisk/tests/verify_openssl_archives.py"
 
-echo "== 7. packaging script refusals =="
+echo "== 7. native bridge against the pinned LSPlant and Dobby headers =="
+python3 "$ROOT/zygisk/tests/verify_native_api.py" "$OUT"
+
+echo "== 8. packaging script refusals =="
 bash -n "$ROOT/zygisk/build-zygisk.sh"
 bash -n "$ROOT/zygisk/build-native.sh"
 DUMMY="$OUT/dummy.apk"

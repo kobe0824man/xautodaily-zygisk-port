@@ -296,7 +296,17 @@ void JNICALL native_hook_method(JNIEnv *env, jclass, jobject member, jclass, jin
     jobject hooker = env->NewObject(hooker_class, constructor, member, additional_info);
     if (hooker == nullptr) return;
 
-    jobject backup = lsplant::Hook(env, member, hooker, callback);
+    // LSPlant takes the callback as a java.lang.reflect.Method object: it checks that the
+    // argument is a java.lang.reflect.Executable and reads the callback's name and declaring
+    // class from it to generate the hooker. A method ID is a different C++ type and would not
+    // satisfy that check, so reflect the method ID into the Method object LSPlant expects.
+    jobject callback_method = env->ToReflectedMethod(env, callback, JNI_FALSE);
+    if (callback_method == nullptr) {
+        throw_java(env, "java/lang/IllegalStateException", "Cannot reflect the LSPlant callback method");
+        return;
+    }
+
+    jobject backup = lsplant::Hook(env, member, hooker, callback_method);
     if (backup == nullptr) {
         throw_java(env, "java/lang/IllegalStateException", "LSPlant could not hook "
                 "the requested method/constructor");

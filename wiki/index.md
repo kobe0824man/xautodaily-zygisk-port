@@ -8,6 +8,7 @@ Catalog of everything durable this project has learned. Pages are flat kebab-cas
 
 ## Concepts
 - [Zygisk port validation model](project/concept-port-validation.md) — what can be verified locally, on CI, and only on a device.
+- [The native bridge is never compiled by the source-level suite](project/concept-native-bridge-api.md) — how the C++ bridge is pinned against the LSPlant and Dobby headers instead.
 
 ## Decisions
 - [Package a working API 82 runtime, not the published stub](project/decision-api82-runtime.md) — the vendored `source/xposed-api82` module.
