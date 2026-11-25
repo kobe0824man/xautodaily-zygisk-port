@@ -72,3 +72,21 @@ hardened before its first real run):
 **Consequence**: the organisation repository keeps the history and the source of record, but the
 authoritative Gradle/JNI build now runs in the personal repository. The level-2 evidence in
 [[concept-port-validation]] depends on that repository staying healthy.
+
+**What is still missing** — the publish step itself. The personal repository exists and is
+public, but it still holds only its empty initial commit: the port branch has never been pushed
+there, so **no workflow run exists in it yet**. Two independent routes to the credential were
+measured:
+
+- The platform's own credential acts as `productos-si`. It reads the personal repository but
+  reports `push: false` on it, and the platform's push tools all target the project's *bound*
+  repository (the organisation one) — confirmed by pushing and watching the personal
+  repository's refs stay unchanged.
+- The platform does hold a GitHub connection for `kobe0824man` (it is what lists that account's
+  repositories), but the credential is platform-side and only reachable through an imported
+  project. Importing the personal repository is refused by the Free plan's three-active-project
+  limit, and freeing a slot means deleting a project — the owner's call, and this connection's
+  grant covers a single project, so the other two cannot be enumerated from here.
+
+So the publish step needs a credential that acts as `kobe0824man`, and it is one tested command
+away: `GITHUB_PERSONAL_TOKEN=… bash tools/relocate_ci_to_personal_repo.sh`.

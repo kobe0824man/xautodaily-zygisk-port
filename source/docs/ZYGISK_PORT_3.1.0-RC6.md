@@ -106,6 +106,28 @@
   both branches, 4666 tracked files, both workflow files and the Dobby submodule gitlink
   (`5dfc854`) that the native build needs.
 
+- **Personal repository state**: `kobe0824man/xautodaily-zygisk-port` exists, is **public**, and
+  still holds only its empty initial commit on `main` (SHA `f9e2d261`). The port branch has never
+  been published there, so **no workflow run exists in it yet** — the Actions API for that
+  repository returns an empty run list. The organisation repository remains the source of
+  record and its port branch is current.
+- **What the platform itself can and cannot do here** (measured, not assumed):
+  - The platform's own credential acts as the `productos-si` service account. It *reads*
+    `kobe0824man/xautodaily-zygisk-port` but the API reports `push: false` on it, and it cannot
+    read that repository's Actions permissions (403). The platform's own push tools
+    (`git_push`, `git_sync`, `push_to_github`) all target the project's *bound* repository, which
+    is the organisation repository — verified by pushing and observing that the personal
+    repository's refs did not change.
+  - The platform does hold a GitHub connection for the `kobe0824man` account — it is what lists
+    that account's repositories — but the credential lives on the platform side and is only
+    reachable through an imported project.
+  - Importing `kobe0824man/xautodaily-zygisk-port` as a project is refused: the Free plan allows
+    three active projects and all three are in use. The only way to free a slot is to delete a
+    project, which is the owner's call, and this connection's grant covers a single project, so
+    the other two cannot even be enumerated from here.
+  - Consequently the publish step needs a credential that acts as `kobe0824man` itself. The
+    relocation tool reads it from `GITHUB_PERSONAL_TOKEN` and refuses to push without it.
+
 - **Device test**: no rooted Android device or emulator with QQ/TIM has been used. The new `handleBindApplication` timing, ART symbol resolver, constructor original-call path, Tinker loader update, native dependencies, and both ABIs remain unverified at runtime.
 - **Original APK bytes**: the exact APK is stored remotely at `public/payloads/xautodaily/XAutoDaily_3.1.0-rc6.apk`; a fresh download measured 9,581,427 bytes and SHA-256 `2d337bb750d0187d6e6eb06fa0429bd3e37b0f2841b904f6d01d08c6886413df`. It is byte-identical to the supplied attachment. However, it predates the port's Bootstrap/BindApplicationHook/HostClassLoaderBridge/HookRuntime/XposedHooker/NativeLoader classes. The packager now rejects it as a runtime payload even with a matching hash; only the source-rebuilt APK can run this Java bridge. No installable ZIP has been produced.
 
