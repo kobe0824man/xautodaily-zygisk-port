@@ -176,3 +176,11 @@
 #-keepattributes EnclosingMethod
 -keepattributes *Annotation*
 -keep class * extends java.lang.annotation.Annotation {*;}
+
+
+# Zygisk invokes these entry points and JNI callbacks by stable names.
+-keep class me.teble.xposed.autodaily.zygisk.** { *; }
+-keep class me.teble.xposed.autodaily.hook.MainHook { *; }
+-keep class de.robv.android.xposed.** { *; }
+-keep class android.content.res.XResources { *; }
+-keep class android.content.res.XModuleResources { *; }

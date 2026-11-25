@@ -1,0 +1,79 @@
+name: XAutoDaily Zygisk CI
+
+on:
+  push:
+    branches: [zygisk-port-3.1.0-rc6]
+  pull_request:
+    branches: [zygisk-port-3.1.0-rc6]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  android-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Checkout (including pinned native dependencies)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install pinned Android build tools
+        shell: bash
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            'platforms;android-36' 'build-tools;36.0.0' \
+            'ndk;27.0.12077973' 'cmake;3.22.1'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Unit tests and source-rebuilt payload APK
+        run: |
+          chmod +x source/gradlew source/zygisk/build-native.sh source/zygisk/build-zygisk.sh
+          ./source/gradlew --no-daemon -p source -PzygiskPort=true \
+            :app:testDebugUnitTest :app:assembleDebug
+
+      - name: Build Zygisk loader for both ABIs and package candidate
+        env:
+          ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/27.0.12077973
+          PAYLOAD_APK: ${{ github.workspace }}/source/app/build/outputs/apk/debug/app-debug.apk
+          PAYLOAD_KIND: source-rebuild
+        run: |
+          source/zygisk/build-zygisk.sh
+
+      - name: Verify APK payload metadata and native ELF exports
+        shell: bash
+        run: |
+          AAPT="$ANDROID_HOME/build-tools/36.0.0/aapt"
+          "$AAPT" dump badging source/app/build/outputs/apk/debug/app-debug.apk | grep -E "package:|application-label"
+          unzip -l source/app/build/outputs/apk/debug/app-debug.apk | grep -E 'lib/(arm64-v8a|armeabi-v7a)/lib(xautodaily_hook|lsplant)\\.so'
+          for abi in arm64-v8a armeabi-v7a; do
+            file "source/zygisk/module/zygisk/$abi.so"
+            readelf -h "source/zygisk/module/zygisk/$abi.so" | grep -E 'Class:|Machine:'
+            nm -D "source/zygisk/module/zygisk/$abi.so" | grep -q 'zygisk_module_entry'
+          done
+          sha256sum source/app/build/outputs/apk/debug/app-debug.apk build/XAutoDaily-Zygisk-3.1.0-rc6-source-rebuild.zip
+
+      - name: Upload source-rebuild candidate and test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xautodaily-zygisk-source-rebuild
+          if-no-files-found: warn
+          path: |
+            source/app/build/outputs/apk/debug/app-debug.apk
+            build/XAutoDaily-Zygisk-3.1.0-rc6-source-rebuild.zip
+            source/app/build/reports/tests/testDebugUnitTest/**

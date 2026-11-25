@@ -7,7 +7,6 @@ import android.app.NotificationManager
 import android.app.Service
 import android.content.Context
 import android.content.Intent
-import android.content.res.XModuleResources
 import android.net.Uri
 import android.os.Build
 import android.util.Log
@@ -45,7 +44,6 @@ import me.teble.xposed.autodaily.hook.base.injectClassLoader
 import me.teble.xposed.autodaily.hook.base.load
 import me.teble.xposed.autodaily.hook.base.moduleLoadInit
 import me.teble.xposed.autodaily.hook.base.modulePath
-import me.teble.xposed.autodaily.hook.base.moduleRes
 import me.teble.xposed.autodaily.hook.config.Config
 import me.teble.xposed.autodaily.hook.config.Config.confuseInfo
 import me.teble.xposed.autodaily.hook.config.Config.hooksVersion
@@ -91,8 +89,7 @@ class MainHook : IXposedHookLoadPackage, IXposedHookZygoteInit {
     override fun initZygote(startupParam: IXposedHookZygoteInit.StartupParam) {
         mStartupParam = startupParam
         modulePath = startupParam.modulePath
-        moduleRes = XModuleResources.createInstance(modulePath, null)
-        EzXHelperInit.initZygote(startupParam)
+        // Zygisk uses the payload APK path directly; XModuleResources is an Xposed-framework stub here.
     }
 
     override fun handleLoadPackage(loadPackageParam: LoadPackageParam) {

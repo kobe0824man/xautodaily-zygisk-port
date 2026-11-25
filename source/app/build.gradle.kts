@@ -37,13 +37,19 @@ plugins {
 val signingPropFile = File(projectDir, "signing.properties")
 val performSigning = signingPropFile.exists()
 
+val zygiskPortBuild = providers.gradleProperty("zygiskPort").orNull == "true"
 val appVerCode: Int by lazy {
-    val versionCode = SimpleDateFormat("yyMMddHH", Locale.ENGLISH).format(Date())
-    println("versionCode: $versionCode")
-    versionCode.toInt()
+    if (zygiskPortBuild) {
+        // Matches the uploaded 3.1.0-rc6 APK manifest; normal upstream builds retain date-based codes.
+        26112014
+    } else {
+        val versionCode = SimpleDateFormat("yyMMddHH", Locale.ENGLISH).format(Date())
+        println("versionCode: $versionCode")
+        versionCode.toInt()
+    }
 }
 val buildNum: String get() = SimpleDateFormat("MMddHH", Locale.ENGLISH).format(Date())
-val appVerName: String = "3.0.37"
+val appVerName: String = if (zygiskPortBuild) "3.1.0-rc6" else "3.0.37"
 val updateLog = """
 【功能】
 - 修复 a16+ 插件加载失败的问题
@@ -91,7 +97,7 @@ android {
 
         externalNativeBuild {
             cmake {
-                targets("xa_native")
+                targets("xa_native", "xautodaily_hook")
                 abiFilters("armeabi-v7a", "arm64-v8a")
                 arguments("-DANDROID_STL=c++_static")
                 val flags = arrayOf(
@@ -136,7 +142,7 @@ android {
                 else signingConfigs.getByName("debug")
         }
         val debug by getting {
-            versionNameSuffix = ".$buildNum-debug"
+            if (!zygiskPortBuild) versionNameSuffix = ".$buildNum-debug"
             val debugFlags = arrayOf<String>(
                 "-DMODULE_SIGNATURE=FF9FF61037FF85BEDDBA5C98A3CB7600",
                 "-DPKG_NAME=${namespace}",
@@ -371,6 +377,8 @@ configurations.all {
 }
 
 dependencies {
+    testImplementation("junit:junit:4.13.2")
+
     implementation(project(":dexkit"))
     implementation(project(":mmkv"))
     compileOnly(project(":stub"))
@@ -379,7 +387,8 @@ dependencies {
     implementation(libs.androidx.multidex)
     implementation(libs.hiddenapibypass)
 
-    compileOnly(libs.api)
+    implementation(libs.api)
+    implementation("org.lsposed.lsplant:lsplant-standalone:6.4")
     implementation(libs.ezxhelper)
     implementation(libs.kotlinx.collections.immutable)
     implementation(libs.protobuf.kotlin.lite)
