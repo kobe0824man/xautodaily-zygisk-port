@@ -27,7 +27,7 @@
 - **OpenSSL dependency repair**: the exact four OpenSSL 1.1.1t static archives were restored from the pinned upstream commit; Git blob hashes and ELF ABI checks are enforced by verify_openssl_archives.py.
 - **Local build limitation**: the ProductOS project shell has no Java, Gradle, Android SDK/NDK, CMake, or Ninja toolchain, so a local Gradle/JNI build cannot be claimed. The GitHub Actions workflow must provide the authoritative compile/test result.
 - **Device test**: no rooted Android device or emulator with QQ/TIM has been used. The new `handleBindApplication` timing, ART symbol resolver, constructor original-call path, Tinker loader update, native dependencies, and both ABIs remain unverified at runtime.
-- **Original APK bytes**: the chat attachment is still not in the remote ProductOS project. The source-rebuild CI candidate is a newly built debug APK, not the uploaded APK and not byte-identical to it. No final ZIP containing the original APK has been produced or claimed.
+- **Original APK bytes**: the exact APK is stored remotely at `public/payloads/xautodaily/XAutoDaily_3.1.0-rc6.apk`; a fresh download measured 9,581,427 bytes and SHA-256 `2d337bb750d0187d6e6eb06fa0429bd3e37b0f2841b904f6d01d08c6886413df`. It is byte-identical to the supplied attachment. However, it predates the port's Bootstrap/BindApplicationHook/HostClassLoaderBridge/HookRuntime/XposedHooker/NativeLoader classes. The packager now rejects it as a runtime payload even with a matching hash; only the source-rebuilt APK can run this Java bridge. No installable ZIP has been produced.
 
 ## Explicitly incomplete
 
@@ -35,6 +35,6 @@
 - `XposedBridge.setObjectClass` and `cloneToSubclass` native behavior (explicitly fail as unsupported).
 - Device-verified constructor `invokeOriginalMethod` behavior and complete compatibility with every API-82 edge case.
 - Android-version/ABI matrix tests, QQ/TIM startup stability, hook coverage, and Tinker runtime validation.
-- Original-APK embedding and an installable ZIP based on the exact uploaded bytes.
+- A working runtime based on the exact original APK bytes: that APK does not contain the new Java bridge classes, and the current port does not inject a separate DEX overlay. The exact original is archived in ProductOS storage but is not a runnable payload.
 
 The implementation is a substantial port in progress, not a completed or device-validated replacement for the LSPosed module.
