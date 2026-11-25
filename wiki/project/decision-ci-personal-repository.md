@@ -25,7 +25,11 @@ owner's personal account, instead of the organisation repository
 
 **How** — the port branch, the workflow files and the build contract are unchanged; only the
 hosting repository moves. The personal account draws on its own Actions allocation, so the
-organisation's exhausted pool no longer applies.
+organisation's exhausted pool no longer applies. `tools/relocate_ci_to_personal_repo.sh` performs
+the relocation: it creates the repository, publishes the port branch and `main`, and verifies
+that the branch refs and the workflow files landed on the remote. The token needs the `repo`
+scope (create and push) and the `workflow` scope (push `.github/workflows` — GitHub rejects
+workflow updates without it).
 
 **What changed in the workflows at the same time** (the build had never executed, so it was
 hardened before its first real run):

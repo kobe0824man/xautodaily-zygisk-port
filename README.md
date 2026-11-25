@@ -42,6 +42,17 @@ repository minutes pool.
 The workflows therefore run in the repository owner's personal account, which draws on that
 account's own Actions allocation instead of the organisation's.
 
+`tools/relocate_ci_to_personal_repo.sh` performs that relocation: it creates the personal
+repository, publishes the port branch and `main`, and verifies that the branch refs and the
+workflow files actually landed on the remote.
+
+```bash
+GITHUB_PERSONAL_TOKEN=github_pat_xxx bash tools/relocate_ci_to_personal_repo.sh
+```
+
+The token needs the `repo` scope (create and push the repository) and the `workflow` scope
+(push the files under `.github/workflows` - GitHub rejects workflow updates without it).
+
 ## Local verification
 
 The sandbox has no Gradle, Android SDK/NDK, CMake or Ninja, so the Gradle build cannot run
