@@ -35,4 +35,6 @@ include(
     ":dexkit",
     ":mmkv",
     ":stub",
+    ":xposed-api82",
+    ":xposed-api82-stubs",
 )
