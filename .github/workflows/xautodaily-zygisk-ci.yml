@@ -46,10 +46,12 @@ jobs:
           chmod +x source/gradlew source/zygisk/build-native.sh source/zygisk/build-zygisk.sh
           ./source/gradlew --no-daemon -p source -PzygiskPort=true :app:testDebugUnitTest :app:assembleDebug
 
-      - name: Verify Xposed API 82 JNI registration table
+      - name: Verify Xposed API 82 JNI registration table and vendored sources
         run: |
           curl --retry 3 --fail --silent --show-error https://api.xposed.info/de/robv/android/xposed/api/82/api-82-sources.jar -o /tmp/xposed-api-82-sources.jar
-          python3 source/zygisk/tests/verify_xposed_api82.py /tmp/xposed-api-82-sources.jar source/app/src/main/cpp/zygisk_hook.cpp
+          python3 source/zygisk/tests/verify_xposed_api82.py \
+            /tmp/xposed-api-82-sources.jar source/app/src/main/cpp/zygisk_hook.cpp \
+            --vendored source/xposed-api82/src/main/java
 
       - name: Build Zygisk loader for both ABIs and package candidate
         run: |
