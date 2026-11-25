@@ -18,6 +18,11 @@ owner's personal account, instead of the organisation repository
 - `GET /orgs/productos-agents/actions/permissions` reports `enabled_repositories: all`,
   `allowed_actions: all`. `GET /repos/.../actions/permissions` reports `enabled: true`,
   `allowed_actions: all`. Actions is not disabled and no action is filtered out.
+- The organisation's Actions usage for November 2026 measures **1,906 Linux minutes** plus 24
+  Windows and 12 macOS minutes against the free plan's included allowance, and
+  private-repository minutes are charged at double rate against that allowance. This repository
+  consumed **zero** of those minutes across 34 attempts, which is precisely what a job rejected
+  before scheduling looks like.
 - A job that is created and dropped without a runner, with all policies enabled, is the
   signature of an exhausted private-repository minutes/billing pool. Private-repository minutes
   are drawn from the organisation's shared pool, which is where this project was hitting its

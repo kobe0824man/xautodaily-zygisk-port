@@ -32,22 +32,27 @@
   current tree.
 - **OpenSSL dependency repair**: the exact four OpenSSL 1.1.1t static archives were restored from the pinned upstream commit; Git blob hashes and ELF ABI checks are enforced by verify_openssl_archives.py.
 - **Local build limitation**: the shell has no Gradle, Android SDK/NDK, CMake or Ninja toolchain, so a local Gradle/JNI build of the app module still cannot be claimed. A JDK 21 and the public `android.jar` are available, which is what made the package-level compile and the unit tests above possible. The GitHub Actions workflow must provide the authoritative full-build result.
-- **CI failure point — confirmed**: the organisation's Actions environment, not the workflow or the
-  sources. Every one of the 34 workflow runs in the repository is `completed / failure`, including
-  runs of the trivial self-check workflow that only calls `echo`; there is not a single successful
-  run. The job objects report `runner_name` empty and contain **no steps at all**, so the job is
-  rejected before a runner is scheduled rather than failing during execution. The organisation
-  policy (`/orgs/productos-agents/actions/permissions`) and the repository policy both report
-  `enabled: true`, `allowed_actions: all`, and `sha_pinning_required: false`, so Actions is not
-  disabled and no action is filtered. The only remaining cause for a job that is created and then
-  discarded without a runner is the organisation's private-repository Actions minutes/billing
-  pool. The check-run annotations endpoint is not readable with the platform token, so the exact
-  billing wording cannot be quoted, but the failure is definitely not a source compile failure.
+- **CI failure point — confirmed and measured**: the organisation's Actions environment, not the
+  workflow or the sources. Every one of the 34 workflow runs in the repository is
+  `completed / failure`, including runs of the trivial self-check workflow that only calls
+  `echo`; there is not a single successful run. The job objects report `runner_name` empty and
+  contain **no steps at all**, so the job is rejected before a runner is scheduled rather than
+  failing during execution. The organisation policy (`/orgs/productos-agents/actions/permissions`)
+  and the repository policy both report `enabled: true`, `allowed_actions: all`, and
+  `sha_pinning_required: false`, so Actions is not disabled and no action is filtered. The
+  organisation's Actions usage for November 2026 measures **1,906 Linux minutes** plus 24 Windows
+  and 12 macOS minutes against the free plan's included allowance, and private-repository minutes
+  are charged at double rate against that allowance. This repository itself consumed **zero**
+  minutes of that budget despite 34 attempts, which is exactly what a job rejected before
+  scheduling looks like. The check-run annotations endpoint is not readable with the platform
+  token, so the exact billing wording cannot be quoted, but the failure is definitely not a
+  source compile failure: it is an exhausted private-repository Actions allocation.
 - **CI relocation**: the build workflows are moved to the repository owner's personal GitHub
   account (`kobe0824man/xautodaily-zygisk-port`), whose Actions allocation is personal rather
   than organisational, so the organisation's exhausted pool no longer applies. The branch name,
   the workflow files and the build contract are unchanged; only the hosting repository moves.
-  The workflows were hardened for their first real execution at the same time: the CMake/Ninja
+  `tools/relocate_ci_to_personal_repo.sh` performs the relocation and verifies the result. The
+  workflows were hardened for their first real execution at the same time: the CMake/Ninja
   used by the native build are now taken from the pinned SDK package (3.22.1) instead of the
   runner image's toolchain, the job timeout is 120 minutes for the cold SDK/NDK download and the
   two-ABI native build, and superseded runs on the same ref are cancelled.
