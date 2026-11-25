@@ -10,11 +10,15 @@ on:
 permissions:
   contents: read
 
-# Cancel superseded runs on the same ref: the Android/NDK toolchain download plus the two-ABI
-# native build is expensive, and only the newest commit needs to prove itself.
+# One build per commit, and never a build that is cancelled by another one. The group carries
+# the commit SHA, so a new commit does not share a group with the build it supersedes and the
+# two run side by side; cancel-in-progress is off, so a second run of the *same* commit - the
+# push trigger and a manual dispatch both happen in this project - waits its turn instead of
+# killing the build that is already under way. Minutes are not the constraint here: this
+# repository is public, so its runners come from the unlimited free pool.
 concurrency:
-  group: zygisk-ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: zygisk-ci-${{ github.ref }}-${{ github.sha }}
+  cancel-in-progress: false
 
 jobs:
   android-build:
