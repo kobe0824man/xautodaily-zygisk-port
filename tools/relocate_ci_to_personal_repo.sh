@@ -78,6 +78,9 @@ else
   git -C "$WORKSPACE" remote add personal "https://x-access-token:$TOKEN@github.com/$OWNER/$REPO_NAME.git"
   git -C "$WORKSPACE" push --force personal "$BRANCH:refs/heads/$BRANCH"
   git -C "$WORKSPACE" push --force personal "main:refs/heads/main"
+  # The token only needs to be in the remote URL while pushing; drop it again so it does not
+  # sit in .git/config on disk.
+  git -C "$WORKSPACE" remote set-url personal "https://github.com/$OWNER/$REPO_NAME.git"
 fi
 
 say "verify"
