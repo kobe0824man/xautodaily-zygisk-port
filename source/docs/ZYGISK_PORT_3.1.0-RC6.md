@@ -95,6 +95,17 @@
     pinned OpenSSL blob hashes, the native bridge against the pinned LSPlant/Dobby headers and the
     packaging refusals all pass.
 
+- **Publishing blocker found and removed**: the sandbox working copy is a shallow clone, and
+  GitHub refuses a push from a shallow clone (`! [remote rejected] ... (shallow update not
+  allowed)`) — the branch is simply never created. The leftover boundary commit `2e10c854`
+  (from the platform's original upstream clone) was unreachable from every ref, so its marker in
+  `.git/shallow` was stale; `git fetch --unshallow` cannot repair it because the missing parent
+  object exists on no remote and the server sends nothing. Removing the stale marker makes the
+  repository non-shallow and the push succeeds. Verified against a local bare mirror, which
+  rejects shallow updates the same way GitHub does, and by cloning that mirror fresh: it carries
+  both branches, 4666 tracked files, both workflow files and the Dobby submodule gitlink
+  (`5dfc854`) that the native build needs.
+
 - **Device test**: no rooted Android device or emulator with QQ/TIM has been used. The new `handleBindApplication` timing, ART symbol resolver, constructor original-call path, Tinker loader update, native dependencies, and both ABIs remain unverified at runtime.
 - **Original APK bytes**: the exact APK is stored remotely at `public/payloads/xautodaily/XAutoDaily_3.1.0-rc6.apk`; a fresh download measured 9,581,427 bytes and SHA-256 `2d337bb750d0187d6e6eb06fa0429bd3e37b0f2841b904f6d01d08c6886413df`. It is byte-identical to the supplied attachment. However, it predates the port's Bootstrap/BindApplicationHook/HostClassLoaderBridge/HookRuntime/XposedHooker/NativeLoader classes. The packager now rejects it as a runtime payload even with a matching hash; only the source-rebuilt APK can run this Java bridge. No installable ZIP has been produced.
 
