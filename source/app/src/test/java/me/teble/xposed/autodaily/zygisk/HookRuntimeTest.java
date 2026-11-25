@@ -17,6 +17,7 @@ public class HookRuntimeTest {
         public int backupAdd(int value) { return seed + value + 100; }
         public void backupConstructor(int value) { this.seed = value; }
         public static int multiply(int value) { return value * 2; }
+        public static int backupMultiply(int value) { return value * 3; }
     }
 
     @Test
@@ -43,6 +44,17 @@ public class HookRuntimeTest {
 
         assertEquals(null, result);
         assertEquals(23, receiver.seed);
+    }
+
+    @Test
+    public void invokesLsPlantBackupForStaticMethods() throws Exception {
+        Method target = Sample.class.getDeclaredMethod("multiply", int.class);
+        Method backup = Sample.class.getDeclaredMethod("backupMultiply", int.class);
+        HookRuntime.registerBackup(target, backup);
+
+        Object result = HookRuntime.invokeOriginal(target, null, new Object[]{7});
+
+        assertEquals(21, result);
     }
 
     @Test

@@ -24,9 +24,14 @@ std::string from_java(JNIEnv *env, jstring s) {
     env->ReleaseStringUTFChars(s, p);
     return v;
 }
+bool has_process_prefix(const std::string &process, const char *package_name) {
+    const size_t length = std::strlen(package_name);
+    return process == package_name || (process.size() > length
+        && process.compare(0, length, package_name) == 0
+        && (process[length] == ':' || process[length] == '.'));
+}
 bool target(const std::string &p) {
-    return p.compare(0, sizeof(kQQ)-1, kQQ) == 0 ||
-           p.compare(0, sizeof(kTIM)-1, kTIM) == 0;
+    return has_process_prefix(p, kQQ) || has_process_prefix(p, kTIM);
 }
 bool copy_payload(int fd, const std::string &dst) {
     if (lseek(fd, 0, SEEK_SET) < 0) return false;
@@ -50,27 +55,12 @@ bool copy_payload(int fd, const std::string &dst) {
     close(out);
     return ok;
 }
-jobject host_loader(JNIEnv *env) {
-    jclass at = env->FindClass("android/app/ActivityThread");
-    if (!at) return nullptr;
-    jmethodID current = env->GetStaticMethodID(at, "currentActivityThread",
-        "()Landroid/app/ActivityThread;");
-    if (!current) return nullptr;
-    jobject thread = env->CallStaticObjectMethod(at, current);
-    if (!thread || env->ExceptionCheck()) return nullptr;
-    jfieldID bound_id = env->GetFieldID(at, "mBoundApplication",
-        "Landroid/app/ActivityThread$AppBindData;");
-    if (!bound_id) return nullptr;
-    jobject bound = env->GetObjectField(thread, bound_id);
-    if (!bound) return nullptr;
-    jclass bc = env->GetObjectClass(bound);
-    jfieldID info_id = env->GetFieldID(bc, "info", "Landroid/app/LoadedApk;");
-    if (!info_id) return nullptr;
-    jobject info = env->GetObjectField(bound, info_id);
-    if (!info) return nullptr;
-    jclass ic = env->GetObjectClass(info);
-    jmethodID get = env->GetMethodID(ic, "getClassLoader", "()Ljava/lang/ClassLoader;");
-    return get ? env->CallObjectMethod(info, get) : nullptr;
+jobject system_loader(JNIEnv *env) {
+    jclass loader_class = env->FindClass("java/lang/ClassLoader");
+    if (!loader_class) return nullptr;
+    jmethodID get_system = env->GetStaticMethodID(loader_class, "getSystemClassLoader",
+        "()Ljava/lang/ClassLoader;");
+    return get_system ? env->CallStaticObjectMethod(loader_class, get_system) : nullptr;
 }
 
 class XAutoDaily final : public zygisk::ModuleBase {
@@ -106,9 +96,12 @@ public:
         }
         close(payload_fd_); payload_fd_ = -1;
 
-        jobject parent = host_loader(env_);
+        // ActivityThread.currentActivityThread() is still null in postAppSpecialize. Load only
+        // the bootstrap with the system loader; it arms a one-shot handleBindApplication hook
+        // and resolves LoadedApk.getClassLoader() immediately before Application creation.
+        jobject parent = system_loader(env_);
         if (!parent || env_->ExceptionCheck()) {
-            env_->ExceptionClear(); LOGE("host class loader unavailable"); return;
+            env_->ExceptionClear(); LOGE("system ClassLoader unavailable"); return;
         }
         jclass dex = env_->FindClass("dalvik/system/DexClassLoader");
         if (!dex) { env_->ExceptionClear(); LOGE("DexClassLoader unavailable"); return; }
@@ -120,7 +113,7 @@ public:
         jstring libs = env_->NewStringUTF((cache + "/lib").c_str());
         jobject loader = env_->NewObject(dex, ctor, dex_path, opt, libs, parent);
         if (!loader || env_->ExceptionCheck()) {
-            env_->ExceptionClear(); LOGE("payload DexClassLoader creation failed"); return;
+            env_->ExceptionClear(); LOGE("bootstrap DexClassLoader creation failed"); return;
         }
         jmethodID load = env_->GetMethodID(dex, "loadClass",
             "(Ljava/lang/String;)Ljava/lang/Class;");
@@ -130,15 +123,16 @@ public:
             env_->ExceptionClear(); LOGE("Bootstrap class not found in payload"); return;
         }
         jmethodID start = env_->GetStaticMethodID(static_cast<jclass>(klass), "start",
-            "(Ljava/lang/ClassLoader;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V");
+            "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V");
         if (!start) { env_->ExceptionClear(); LOGE("Bootstrap.start signature missing"); return; }
-        jstring pkg = env_->NewStringUTF(process_.compare(0, sizeof(kQQ)-1, kQQ) == 0 ? kQQ : kTIM);
+        jstring pkg = env_->NewStringUTF(has_process_prefix(process_, kQQ) ? kQQ : kTIM);
         jstring proc = env_->NewStringUTF(process_.c_str());
-        env_->CallStaticVoidMethod(static_cast<jclass>(klass), start, parent, dex_path, pkg, proc);
+        env_->CallStaticVoidMethod(static_cast<jclass>(klass), start, dex_path, pkg, proc);
         if (env_->ExceptionCheck()) {
             env_->ExceptionDescribe(); env_->ExceptionClear(); LOGE("Bootstrap.start failed");
-        } else LOGI("bootstrap dispatched: %s", process_.c_str());
+        } else LOGI("deferred bootstrap armed: %s", process_.c_str());
     }
+
 private:
     zygisk::Api *api_ = nullptr;
     JNIEnv *env_ = nullptr;

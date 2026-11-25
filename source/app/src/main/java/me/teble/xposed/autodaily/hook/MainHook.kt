@@ -59,6 +59,7 @@ import me.teble.xposed.autodaily.utils.LogUtil
 import me.teble.xposed.autodaily.utils.TaskExecutor
 import me.teble.xposed.autodaily.utils.TaskExecutor.CORE_SERVICE_FLAG
 import me.teble.xposed.autodaily.utils.TaskExecutor.CORE_SERVICE_TOAST_FLAG
+import me.teble.xposed.autodaily.zygisk.Bootstrap
 import me.teble.xposed.autodaily.utils.getArtApexVersion
 import me.teble.xposed.autodaily.utils.getModulePath
 import me.teble.xposed.autodaily.utils.new
@@ -147,6 +148,8 @@ class MainHook : IXposedHookLoadPackage, IXposedHookZygoteInit {
     private fun updateHostClassLoader(classLoader: ClassLoader) {
         val changed = hostClassLoader !== classLoader
         hostClassLoader = classLoader
+        // Keep the module DexClassLoader parent in sync when Tinker replaces the host loader.
+        Bootstrap.updateHostClassLoader(classLoader)
         // 先建立宿主委托，再初始化缓存、日志和进程工具，避免 R8 合并的 lambda 提前解析宿主类。
         injectClassLoader()
         if (changed) {

@@ -321,11 +321,33 @@ jobject JNICALL native_invoke_original(JNIEnv *env, jclass, jobject member, jint
     return env->CallStaticObjectMethod(runtime_class, invoke, member, this_object, arguments);
 }
 
-jstring JNICALL native_get_start_class_name(JNIEnv *, jclass) { return nullptr; }
+jboolean JNICALL native_had_init_errors(JNIEnv *, jclass) { return JNI_FALSE; }
 jint JNICALL native_get_runtime(JNIEnv *, jclass) { return 2; } // Xposed API 82: RUNTIME_ART
 jboolean JNICALL native_starts_system_server(JNIEnv *, jclass) { return JNI_FALSE; }
+jstring JNICALL native_get_start_class_name(JNIEnv *, jclass) { return nullptr; }
+jboolean JNICALL native_init_xresources(JNIEnv *, jclass) { return JNI_FALSE; }
 jint JNICALL native_get_xposed_version(JNIEnv *, jclass) { return 82; }
-jboolean JNICALL native_init(JNIEnv *, jclass) { return JNI_TRUE; }
+
+void JNICALL native_remove_final_flag(JNIEnv *env, jclass, jclass) {
+    throw_java(env, "java/lang/UnsupportedOperationException",
+            "Xposed resource superclass generation is not implemented by the Zygisk port");
+}
+
+void JNICALL native_close_files_before_fork(JNIEnv *, jclass) {}
+void JNICALL native_reopen_files_after_fork(JNIEnv *, jclass) {}
+
+void JNICALL native_invalidate_callers(JNIEnv *env, jclass, jobjectArray methods) {
+    if (!g_initialized || methods == nullptr) return;
+    const jsize count = env->GetArrayLength(methods);
+    for (jsize index = 0; index < count; ++index) {
+        jobject method = env->GetObjectArrayElement(methods, index);
+        if (method != nullptr) {
+            (void) lsplant::Deoptimize(env, method);
+            env->DeleteLocalRef(method);
+        }
+        if (env->ExceptionCheck()) return;
+    }
+}
 
 void JNICALL native_set_object_class(JNIEnv *env, jclass, jobject, jclass) {
     throw_java(env, "java/lang/UnsupportedOperationException",
@@ -360,16 +382,21 @@ jobject JNICALL native_clone_to_subclass(JNIEnv *env, jclass, jobject, jclass) {
 }
 
 JNINativeMethod g_methods[] = {
-    {const_cast<char *>("getStartClassName"), const_cast<char *>("()Ljava/lang/String;"), reinterpret_cast<void *>(native_get_start_class_name)},
+    {const_cast<char *>("hadInitErrors"), const_cast<char *>("()Z"), reinterpret_cast<void *>(native_had_init_errors)},
     {const_cast<char *>("getRuntime"), const_cast<char *>("()I"), reinterpret_cast<void *>(native_get_runtime)},
     {const_cast<char *>("startsSystemServer"), const_cast<char *>("()Z"), reinterpret_cast<void *>(native_starts_system_server)},
+    {const_cast<char *>("getStartClassName"), const_cast<char *>("()Ljava/lang/String;"), reinterpret_cast<void *>(native_get_start_class_name)},
+    {const_cast<char *>("initXResourcesNative"), const_cast<char *>("()Z"), reinterpret_cast<void *>(native_init_xresources)},
     {const_cast<char *>("getXposedVersion"), const_cast<char *>("()I"), reinterpret_cast<void *>(native_get_xposed_version)},
-    {const_cast<char *>("initNative"), const_cast<char *>("()Z"), reinterpret_cast<void *>(native_init)},
     {const_cast<char *>("hookMethodNative"), const_cast<char *>("(Ljava/lang/reflect/Member;Ljava/lang/Class;ILjava/lang/Object;)V"), reinterpret_cast<void *>(native_hook_method)},
     {const_cast<char *>("invokeOriginalMethodNative"), const_cast<char *>("(Ljava/lang/reflect/Member;I[Ljava/lang/Class;Ljava/lang/Class;Ljava/lang/Object;[Ljava/lang/Object;)Ljava/lang/Object;"), reinterpret_cast<void *>(native_invoke_original)},
     {const_cast<char *>("setObjectClassNative"), const_cast<char *>("(Ljava/lang/Object;Ljava/lang/Class;)V"), reinterpret_cast<void *>(native_set_object_class)},
     {const_cast<char *>("dumpObjectNative"), const_cast<char *>("(Ljava/lang/Object;)V"), reinterpret_cast<void *>(native_dump_object)},
     {const_cast<char *>("cloneToSubclassNative"), const_cast<char *>("(Ljava/lang/Object;Ljava/lang/Class;)Ljava/lang/Object;"), reinterpret_cast<void *>(native_clone_to_subclass)},
+    {const_cast<char *>("removeFinalFlagNative"), const_cast<char *>("(Ljava/lang/Class;)V"), reinterpret_cast<void *>(native_remove_final_flag)},
+    {const_cast<char *>("closeFilesBeforeForkNative"), const_cast<char *>("()V"), reinterpret_cast<void *>(native_close_files_before_fork)},
+    {const_cast<char *>("reopenFilesAfterForkNative"), const_cast<char *>("()V"), reinterpret_cast<void *>(native_reopen_files_after_fork)},
+    {const_cast<char *>("invalidateCallersNative"), const_cast<char *>("([Ljava/lang/reflect/Member;)V"), reinterpret_cast<void *>(native_invalidate_callers)},
 };
 } // namespace
 

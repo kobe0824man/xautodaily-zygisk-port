@@ -10,6 +10,7 @@ import java.io.InputStream;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Member;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
@@ -19,26 +20,30 @@ import java.util.zip.ZipFile;
 
 import dalvik.system.DexClassLoader;
 
-/** Entry point called by the Zygisk loader after the host process is specialized. */
+/** Initial payload entry. Called by the small Zygisk loader before ActivityThread.main(). */
 public final class Bootstrap {
     private static final String TAG = "XAutoDaily-Zygisk";
     private static final String MAIN_HOOK = "me.teble.xposed.autodaily.hook.MainHook";
+    private static final String BIND_HOOK = "me.teble.xposed.autodaily.zygisk.BindApplicationHook";
     private static final AtomicBoolean STARTED = new AtomicBoolean(false);
+    private static final AtomicBoolean MODULE_INITIALIZED = new AtomicBoolean(false);
+    private static volatile HostClassLoaderBridge hostBridge;
 
     private Bootstrap() {}
 
-    /** Signature is part of the native loader contract; keep it stable. */
-    public static void start(ClassLoader hostClassLoader, String modulePath,
-                             String packageName, String processName) {
+    /** Signature shared with the native Zygisk loader. Do not add host-loader arguments here:
+     * ActivityThread/LoadedApk is not initialized yet in postAppSpecialize.
+     */
+    public static void start(String modulePath, String packageName, String processName) {
         if (!isSupportedPackage(packageName)) return;
         if (!STARTED.compareAndSet(false, true)) return;
         try {
-            startInternal(hostClassLoader, modulePath, packageName, processName);
+            startInternal(modulePath, packageName, processName);
         } catch (Throwable error) {
             STARTED.set(false);
-            Log.e(TAG, "Xposed-compatible bootstrap failed for " + processName, error);
+            Log.e(TAG, "Could not arm deferred XAutoDaily bootstrap for " + processName, error);
             if (error instanceof Error) throw (Error) error;
-            throw new IllegalStateException("Unable to initialize XAutoDaily Zygisk payload", error);
+            throw new IllegalStateException("Unable to arm XAutoDaily Zygisk payload", error);
         }
     }
 
@@ -46,9 +51,8 @@ public final class Bootstrap {
         return "com.tencent.mobileqq".equals(packageName) || "com.tencent.tim".equals(packageName);
     }
 
-    private static void startInternal(ClassLoader hostClassLoader, String modulePath,
-                                      String packageName, String processName) throws Throwable {
-        if (hostClassLoader == null) hostClassLoader = ClassLoader.getSystemClassLoader();
+    private static void startInternal(String modulePath, String packageName, String processName)
+            throws Throwable {
         File apk = new File(modulePath);
         if (!apk.isFile()) throw new IllegalArgumentException("Payload APK does not exist: " + modulePath);
 
@@ -57,16 +61,14 @@ public final class Bootstrap {
                 "xautodaily-zygisk-" + apk.length() + "-" + apk.lastModified());
         File optimizedDir = new File(runtimeDir, "dex");
         File nativeDir = new File(runtimeDir, "lib");
-        if (!optimizedDir.isDirectory() && !optimizedDir.mkdirs()) {
-            throw new IllegalStateException("Cannot create dex cache: " + optimizedDir);
-        }
-        if (!nativeDir.isDirectory() && !nativeDir.mkdirs()) {
-            throw new IllegalStateException("Cannot create native cache: " + nativeDir);
-        }
+        ensureDirectory(optimizedDir, "dex cache");
+        ensureDirectory(nativeDir, "native cache");
 
         extractNativeLibraries(apk, abi, nativeDir);
+        HostClassLoaderBridge bridge = new HostClassLoaderBridge(Bootstrap.class.getClassLoader());
+        hostBridge = bridge;
         ModuleClassLoader moduleLoader = new ModuleClassLoader(
-                apk.getAbsolutePath(), optimizedDir.getAbsolutePath(), nativeDir.getAbsolutePath(), hostClassLoader);
+                apk.getAbsolutePath(), optimizedDir.getAbsolutePath(), nativeDir.getAbsolutePath(), bridge);
 
         List<String> libraries = new ArrayList<>();
         addIfPresent(libraries, new File(nativeDir, "libc++_shared.so"));
@@ -77,40 +79,104 @@ public final class Bootstrap {
 
         Class<?> bridgeClass = moduleLoader.loadClass("de.robv.android.xposed.XposedBridge");
         configureArtRuntime(bridgeClass);
-
-        Class<?> mainHookClass = moduleLoader.loadClass(MAIN_HOOK);
-        Constructor<?> mainConstructor = mainHookClass.getDeclaredConstructor();
-        mainConstructor.setAccessible(true);
-        Object module = mainConstructor.newInstance();
-
-        Object startupParam = newStartupParam(moduleLoader, modulePath);
-        Method initZygote = mainHookClass.getMethod(
-                "initZygote", moduleLoader.loadClass("de.robv.android.xposed.IXposedHookZygoteInit$StartupParam"));
-        invokeUnwrapped(initZygote, module, startupParam);
-
-        Object loadPackageParam = newLoadPackageParam(
-                moduleLoader, hostClassLoader, packageName, processName, getBoundApplicationInfo());
-        Class<?> loadParamClass = moduleLoader.loadClass(
-                "de.robv.android.xposed.callbacks.XC_LoadPackage$LoadPackageParam");
-        Method handleLoadPackage = mainHookClass.getMethod("handleLoadPackage", loadParamClass);
-        invokeUnwrapped(handleLoadPackage, module, loadPackageParam);
-
-        Log.i(TAG, "Initialized " + packageName + "/" + processName
-                + " with host loader " + hostClassLoader + " and module loader " + moduleLoader);
+        installBindApplicationHook(moduleLoader, bridge, modulePath, packageName, processName, bridgeClass);
+        Log.i(TAG, "Deferred bootstrap armed for " + packageName + "/" + processName
+                + "; waiting for ActivityThread.handleBindApplication");
     }
 
-    private static void loadNativeLibraries(ClassLoader moduleLoader, String[] paths) throws Throwable {
-        Class<?> nativeLoader = moduleLoader.loadClass("me.teble.xposed.autodaily.zygisk.NativeLoader");
-        Method load = nativeLoader.getMethod("load", String[].class);
-        invokeUnwrapped(load, null, (Object) paths);
+    private static void installBindApplicationHook(ClassLoader moduleLoader,
+                                                   HostClassLoaderBridge bridge,
+                                                   String modulePath, String packageName,
+                                                   String processName, Class<?> xposedBridge)
+            throws Throwable {
+        ClassLoader bootLoader = ClassLoader.getSystemClassLoader();
+        Class<?> activityThread = Class.forName("android.app.ActivityThread", false, bootLoader);
+        Method bindMethod = null;
+        for (Method method : activityThread.getDeclaredMethods()) {
+            if ("handleBindApplication".equals(method.getName())
+                    && method.getParameterTypes().length == 1) {
+                bindMethod = method;
+                break;
+            }
+        }
+        if (bindMethod == null) {
+            throw new NoSuchMethodException("ActivityThread.handleBindApplication(AppBindData)");
+        }
+        bindMethod.setAccessible(true);
+
+        Class<?> callbackBase = moduleLoader.loadClass("de.robv.android.xposed.XC_MethodHook");
+        Class<?> callbackClass = moduleLoader.loadClass(BIND_HOOK);
+        Constructor<?> callbackConstructor = callbackClass.getConstructor(
+                HostClassLoaderBridge.class, ClassLoader.class,
+                String.class, String.class, String.class);
+        Object callback = callbackConstructor.newInstance(
+                bridge, moduleLoader, modulePath, packageName, processName);
+        Method hookMethod = xposedBridge.getMethod("hookMethod", Member.class, callbackBase);
+        Object unhook = invokeUnwrapped(hookMethod, null, bindMethod, callback);
+        callbackClass.getMethod("setUnhook", Object.class).invoke(callback, unhook);
+    }
+
+    /** Called by BindApplicationHook after AppBindData.info has exposed the actual LoadedApk loader. */
+    public static void initializeModule(ClassLoader moduleLoader, HostClassLoaderBridge bridge,
+                                        String modulePath, String packageName, String processName,
+                                        ClassLoader hostClassLoader, ApplicationInfo appInfo)
+            throws Throwable {
+        if (!MODULE_INITIALIZED.compareAndSet(false, true)) return;
+        try {
+            if (hostClassLoader == null) throw new IllegalArgumentException("Host LoadedApk ClassLoader is null");
+            bridge.setHostClassLoader(hostClassLoader);
+
+            Class<?> bridgeClass = moduleLoader.loadClass("de.robv.android.xposed.XposedBridge");
+            setStaticBoolean(bridgeClass, "isZygote", false);
+            setStaticInt(bridgeClass, "XPOSED_BRIDGE_VERSION", 82);
+
+            Class<?> mainHookClass = moduleLoader.loadClass(MAIN_HOOK);
+            Constructor<?> mainConstructor = mainHookClass.getDeclaredConstructor();
+            mainConstructor.setAccessible(true);
+            Object module = mainConstructor.newInstance();
+
+            Object startupParam = newStartupParam(moduleLoader, modulePath);
+            Method initZygote = mainHookClass.getMethod(
+                    "initZygote", moduleLoader.loadClass(
+                            "de.robv.android.xposed.IXposedHookZygoteInit$StartupParam"));
+            invokeUnwrapped(initZygote, module, startupParam);
+
+            Object loadPackageParam = newLoadPackageParam(
+                    moduleLoader, hostClassLoader, packageName, processName, appInfo);
+            Class<?> loadParamClass = moduleLoader.loadClass(
+                    "de.robv.android.xposed.callbacks.XC_LoadPackage$LoadPackageParam");
+            Method handleLoadPackage = mainHookClass.getMethod("handleLoadPackage", loadParamClass);
+            invokeUnwrapped(handleLoadPackage, module, loadPackageParam);
+
+            Log.i(TAG, "Initialized " + packageName + "/" + processName
+                    + " with LoadedApk loader " + hostClassLoader);
+        } catch (Throwable error) {
+            MODULE_INITIALIZED.set(false);
+            Log.e(TAG, "Xposed-compatible module initialization failed for " + processName, error);
+            throw error;
+        }
+    }
+
+    /** Keep ModuleClassLoader's host delegation synchronized with Tinker loader replacement. */
+    public static void updateHostClassLoader(ClassLoader loader) {
+        HostClassLoaderBridge bridge = hostBridge;
+        if (bridge != null && loader != null) bridge.setHostClassLoader(loader);
     }
 
     private static void configureArtRuntime(Class<?> bridgeClass) throws Exception {
-        Field runtime = bridgeClass.getDeclaredField("runtime");
-        Field artRuntime = bridgeClass.getDeclaredField("RUNTIME_ART");
-        runtime.setAccessible(true);
-        artRuntime.setAccessible(true);
-        runtime.setInt(null, artRuntime.getInt(null));
+        setStaticInt(bridgeClass, "runtime", 2); // API 82 RUNTIME_ART
+    }
+
+    private static void setStaticInt(Class<?> type, String name, int value) throws Exception {
+        Field field = type.getDeclaredField(name);
+        field.setAccessible(true);
+        field.setInt(null, value);
+    }
+
+    private static void setStaticBoolean(Class<?> type, String name, boolean value) throws Exception {
+        Field field = type.getDeclaredField(name);
+        field.setAccessible(true);
+        field.setBoolean(null, value);
     }
 
     private static Object newStartupParam(ClassLoader loader, String modulePath) throws Exception {
@@ -146,23 +212,15 @@ public final class Bootstrap {
         return param;
     }
 
-    private static ApplicationInfo getBoundApplicationInfo() {
-        try {
-            Class<?> activityThread = Class.forName("android.app.ActivityThread");
-            Method current = activityThread.getDeclaredMethod("currentActivityThread");
-            current.setAccessible(true);
-            Object thread = current.invoke(null);
-            if (thread == null) return null;
-            Field boundField = activityThread.getDeclaredField("mBoundApplication");
-            boundField.setAccessible(true);
-            Object bound = boundField.get(thread);
-            if (bound == null) return null;
-            Field appInfoField = bound.getClass().getDeclaredField("appInfo");
-            appInfoField.setAccessible(true);
-            return (ApplicationInfo) appInfoField.get(bound);
-        } catch (Throwable error) {
-            Log.w(TAG, "Could not read ActivityThread.AppBindData.appInfo", error);
-            return null;
+    private static void loadNativeLibraries(ClassLoader moduleLoader, String[] paths) throws Throwable {
+        Class<?> nativeLoader = moduleLoader.loadClass("me.teble.xposed.autodaily.zygisk.NativeLoader");
+        Method load = nativeLoader.getMethod("load", String[].class);
+        invokeUnwrapped(load, null, (Object) paths);
+    }
+
+    private static void ensureDirectory(File directory, String label) {
+        if (!directory.isDirectory() && !directory.mkdirs()) {
+            throw new IllegalStateException("Cannot create " + label + ": " + directory);
         }
     }
 
@@ -216,7 +274,7 @@ public final class Bootstrap {
         }
     }
 
-    /** Child-first for payload code; host QQ/TIM classes and Android framework remain parent-first. */
+    /** Child-first for payload classes, with a late-bound parent for host QQ/TIM classes. */
     private static final class ModuleClassLoader extends DexClassLoader {
         ModuleClassLoader(String dexPath, String optimizedDirectory, String librarySearchPath,
                           ClassLoader parent) {
@@ -244,7 +302,9 @@ public final class Bootstrap {
         }
 
         private static boolean isParentFirst(String name) {
-            // These Xposed compatibility classes are packaged in the module APK, not in the host framework.
+            if (name.equals(Bootstrap.class.getName())
+                    || name.equals(HostClassLoaderBridge.class.getName())) return true;
+            // API 82 supplies these Android-package classes inside the payload APK.
             if (name.equals("android.app.AndroidAppHelper") || name.startsWith("android.content.res.X")) {
                 return false;
             }
