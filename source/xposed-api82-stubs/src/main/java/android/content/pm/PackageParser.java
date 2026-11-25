@@ -21,7 +21,7 @@ public class PackageParser {
         throw new UnsupportedOperationException("stub");
     }
 
-    public static PackageLite parsePackageLite(String path, int flags) throws PackageParserException {
+    public static PackageLite parsePackageLite(String path, int flags) {
         throw new UnsupportedOperationException("stub");
     }
 }

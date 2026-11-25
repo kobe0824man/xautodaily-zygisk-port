@@ -33,7 +33,12 @@ public class XModuleResources extends Resources {
 			throw new IllegalArgumentException("path must not be null");
 
 		AssetManager assets = new AssetManager();
-		assets.addAssetPath(path);
+		// AssetManager#addAssetPath is a hidden framework API and is not part of the public SDK.
+		try {
+			AssetManager.class.getDeclaredMethod("addAssetPath", String.class).invoke(assets, path);
+		} catch (Throwable error) {
+			throw new IllegalStateException("Could not add the module asset path " + path, error);
+		}
 
 		XModuleResources res;
 		if (origRes != null)

@@ -796,7 +796,9 @@ public class XResources extends MiuiResources {
 	}
 
 	/** @hide */
-	@Override
+	// Upstream overrides the hidden Resources#getDrawable(int, Theme, boolean) overload. The public
+	// SDK does not declare it, so the @Override annotation is dropped and the call falls back to
+	// the public getDrawable(int, Theme).
 	public Drawable getDrawable(int id, Theme theme, boolean supportComposedIcons) throws NotFoundException {
 		try {
 			if (incrementMethodDepth("getDrawable") == 1) {
@@ -815,7 +817,7 @@ public class XResources extends MiuiResources {
 					return repRes.getDrawable(repId);
 				}
 			}
-			return super.getDrawable(id, theme, supportComposedIcons);
+			return super.getDrawable(id, theme);
 		} finally {
 			decrementMethodDepth("getDrawable");
 		}
@@ -874,7 +876,7 @@ public class XResources extends MiuiResources {
 	}
 
 	/** @hide */
-	@Override
+	// Same as above: the hidden four-argument overload is not part of the public SDK.
 	public Drawable getDrawableForDensity(int id, int density, Theme theme, boolean supportComposedIcons) throws NotFoundException {
 		try {
 			if (incrementMethodDepth("getDrawableForDensity") == 1) {
@@ -893,7 +895,7 @@ public class XResources extends MiuiResources {
 					return repRes.getDrawableForDensity(repId, density);
 				}
 			}
-			return super.getDrawableForDensity(id, density, theme, supportComposedIcons);
+			return super.getDrawableForDensity(id, density, theme);
 		} finally {
 			decrementMethodDepth("getDrawableForDensity");
 		}
@@ -1261,7 +1263,7 @@ public class XResources extends MiuiResources {
 
 		/** Dummy, will never be called (objects are transferred to this class only). */
 		private XTypedArray() {
-			super(null, null, null, 0);
+			super();
 			throw new UnsupportedOperationException();
 		}
 
