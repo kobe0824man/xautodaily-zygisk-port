@@ -5,3 +5,5 @@
 - **Xposed API**: API 82 is packaged at runtime from `de.robv.android.xposed:api:82` (Apache-2.0); the native bridge registers the API-82 `XposedBridge` native entry points and routes calls through LSPlant.
 
 The Magisk `update-binary` and GPL-3.0 license are copied from `topjohnwu/Magisk` commit `a212cd92b74174f87c720ff849461a90943b382f` (`scripts/module_installer.sh` and `LICENSE`). See `module/META-INF/com/google/android/`.
+
+- **OpenSSL 1.1.1t**: headers and libcrypto.a / libssl.a for arm64-v8a and armeabi-v7a are pinned to LuckyPray/openssl-android commit 11794e5c6fd304b6d434acddd195b40e78e7603a. The static archive Git blob IDs and ABI checks are recorded in ../openssl/BUILD-PROVENANCE.md and enforced by tests/verify_openssl_archives.py.

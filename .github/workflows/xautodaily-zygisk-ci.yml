@@ -33,18 +33,23 @@ jobs:
         shell: bash
         run: |
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
-            'platforms;android-36' 'build-tools;36.0.0' \
-            'ndk;27.0.12077973' 'cmake;3.22.1'
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-36' 'build-tools;36.0.0' 'ndk;27.0.12077973' 'cmake;3.22.1'
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Verify pinned OpenSSL archives
+        run: python3 source/zygisk/tests/verify_openssl_archives.py
+
       - name: Unit tests and source-rebuilt payload APK
         run: |
           chmod +x source/gradlew source/zygisk/build-native.sh source/zygisk/build-zygisk.sh
-          ./source/gradlew --no-daemon -p source -PzygiskPort=true \
-            :app:testDebugUnitTest :app:assembleDebug
+          ./source/gradlew --no-daemon -p source -PzygiskPort=true :app:testDebugUnitTest :app:assembleDebug
+
+      - name: Verify Xposed API 82 JNI registration table
+        run: |
+          curl --retry 3 --fail --silent --show-error https://api.xposed.info/de/robv/android/xposed/api/82/api-82-sources.jar -o /tmp/xposed-api-82-sources.jar
+          python3 source/zygisk/tests/verify_xposed_api82.py /tmp/xposed-api-82-sources.jar source/app/src/main/cpp/zygisk_hook.cpp
 
       - name: Build Zygisk loader for both ABIs and package candidate
         run: |
@@ -57,15 +62,18 @@ jobs:
         shell: bash
         run: |
           AAPT="$ANDROID_HOME/build-tools/36.0.0/aapt"
-          BADGING=$("$AAPT" dump badging source/app/build/outputs/apk/debug/app-debug.apk)
+          APK=source/app/build/outputs/apk/debug/app-debug.apk
+          BADGING=$("$AAPT" dump badging "$APK")
           echo "$BADGING" | grep -F "package: name='me.teble.xposed.autodaily' versionCode='26112014' versionName='3.1.0-rc6'"
-          unzip -l source/app/build/outputs/apk/debug/app-debug.apk | grep -E 'lib/(arm64-v8a|armeabi-v7a)/lib(xautodaily_hook|lsplant|dobby)\.so'
           for abi in arm64-v8a armeabi-v7a; do
+            for lib in libxautodaily_hook.so liblsplant.so libdobby.so; do
+              unzip -l "$APK" "lib/$abi/$lib" | grep -F "$lib" >/dev/null
+            done
             file "source/zygisk/module/zygisk/$abi.so"
             readelf -h "source/zygisk/module/zygisk/$abi.so" | grep -E 'Class:|Machine:'
             nm -D "source/zygisk/module/zygisk/$abi.so" | grep -q 'zygisk_module_entry'
           done
-          sha256sum source/app/build/outputs/apk/debug/app-debug.apk build/XAutoDaily-Zygisk-3.1.0-rc6-source-rebuild.zip
+          sha256sum "$APK" build/XAutoDaily-Zygisk-3.1.0-rc6-source-rebuild.zip
 
       - name: Upload source-rebuild candidate and test reports
         if: always()
