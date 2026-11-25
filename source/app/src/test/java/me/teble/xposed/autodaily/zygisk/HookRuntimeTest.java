@@ -6,9 +6,15 @@ import static org.junit.Assert.assertTrue;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 
+import org.junit.Before;
 import org.junit.Test;
 
 public class HookRuntimeTest {
+    @Before
+    public void clearRegistry() {
+        HookRuntime.clearBackups();
+    }
+
     public static final class Sample {
         int seed;
 

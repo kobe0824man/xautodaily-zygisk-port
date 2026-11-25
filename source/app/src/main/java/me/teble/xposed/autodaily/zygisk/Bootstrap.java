@@ -1,6 +1,6 @@
 package me.teble.xposed.autodaily.zygisk;
 
-import android.app.ApplicationInfo;
+import android.content.pm.ApplicationInfo;
 import android.os.Process;
 import android.util.Log;
 
