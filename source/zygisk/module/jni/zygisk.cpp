@@ -128,17 +128,17 @@ public:
         if (!local_frame.valid()) {
             if (env_->ExceptionCheck()) env_->ExceptionClear();
             LOGE("could not allocate JNI local-reference frame");
-            close(payload_fd_); payload_fd_ = -1; return;
+            close_staged_fds(); return;
         }
         std::string cache = app_data_ + "/code_cache";
         if (mkdir(cache.c_str(), 0700) != 0 && errno != EEXIST) {
             LOGE("cannot create code_cache: %s", strerror(errno));
-            close(payload_fd_); payload_fd_ = -1; return;
+            close_staged_fds(); return;
         }
         const std::string initial_lib_dir = cache + "/lib";
         if (mkdir(initial_lib_dir.c_str(), 0700) != 0 && errno != EEXIST) {
             LOGE("cannot create bootstrap lib dir: %s", strerror(errno));
-            close(payload_fd_); payload_fd_ = -1; return;
+            close_staged_fds(); return;
         }
         std::string apk = cache + "/xautodaily-payload.apk";
         if (!copy_fd_to_path(payload_fd_, apk, 0600)) {
