@@ -5,5 +5,11 @@
 /.productos-pull-complete
 /.productos-stack
 
+# Local credentials. The relocation tool reads GITHUB_PERSONAL_TOKEN from here; it must never
+# be committed, and .git/info/exclude does not travel with a clone.
+.env
+.env.local
+.env.*.local
+
 # Extracted support libraries are generated from SUPPORT_APK during packaging.
 source/zygisk/module/native-libs/
