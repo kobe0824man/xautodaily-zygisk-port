@@ -10,10 +10,18 @@ on:
 permissions:
   contents: read
 
+# Cancel superseded runs on the same ref: the Android/NDK toolchain download plus the two-ABI
+# native build is expensive, and only the newest commit needs to prove itself.
+concurrency:
+  group: zygisk-ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   android-build:
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    # Cold runner: SDK/NDK/CMake downloads, Gradle dependency resolution, the app build and the
+    # two-ABI native build have never run end to end on a real runner. Budget for the first run.
+    timeout-minutes: 120
     steps:
       - name: Checkout (including pinned native dependencies)
         uses: actions/checkout@v4
@@ -56,6 +64,11 @@ jobs:
       - name: Build Zygisk loader for both ABIs and package candidate
         run: |
           export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/27.0.12077973"
+          # Use the pinned CMake/Ninja from the SDK rather than whatever the runner image ships,
+          # so the native build uses the toolchain this workflow declares.
+          export CMAKE_BIN="$ANDROID_HOME/cmake/3.22.1/bin/cmake"
+          export NINJA_BIN="$ANDROID_HOME/cmake/3.22.1/bin/ninja"
+          export PATH="$ANDROID_HOME/cmake/3.22.1/bin:$PATH"
           export PAYLOAD_APK="$GITHUB_WORKSPACE/source/app/build/outputs/apk/debug/app-debug.apk"
           export PAYLOAD_KIND=source-rebuild
           export SUPPORT_APK="$GITHUB_WORKSPACE/source/app/build/outputs/apk/debug/app-debug.apk"
