@@ -25,7 +25,7 @@ PAYLOAD_APK=source/app/build/outputs/apk/debug/app-debug.apk \
   PAYLOAD_KIND=source-rebuild source/zygisk/build-zygisk.sh
 ```
 
-The packaging script requires an explicit APK and records its kind and SHA-256 in `payload.info`. It never fabricates a payload. The CI workflow builds the source-rebuilt debug APK; that APK is not byte-identical to the uploaded original.
+The packaging script requires an explicit APK and records its kind and SHA-256 in `payload.info`. `PAYLOAD_KIND=original` is accepted only when the APK SHA-256 exactly matches the uploaded attachment; it never fabricates or mislabels a payload. The CI workflow builds the source-rebuilt debug APK; that APK is not byte-identical to the uploaded original.
 
 ## Current limits
 

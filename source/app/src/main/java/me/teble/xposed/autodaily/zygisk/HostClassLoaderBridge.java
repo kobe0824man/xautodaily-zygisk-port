@@ -5,6 +5,8 @@ package me.teble.xposed.autodaily.zygisk;
  * during Zygisk postAppSpecialize, so it is installed later from ActivityThread's bind callback.
  */
 public final class HostClassLoaderBridge extends ClassLoader {
+    private static final String BOOTSTRAP_CLASS = "me.teble.xposed.autodaily.zygisk.Bootstrap";
+    private static final String BRIDGE_CLASS = "me.teble.xposed.autodaily.zygisk.HostClassLoaderBridge";
     private volatile ClassLoader hostClassLoader;
 
     public HostClassLoaderBridge(ClassLoader bootstrapClassLoader) {
@@ -25,15 +27,21 @@ public final class HostClassLoaderBridge extends ClassLoader {
         synchronized (this) {
             Class<?> loaded = findLoadedClass(name);
             if (loaded == null) {
-                ClassLoader host = hostClassLoader;
-                if (host != null && host != this) {
-                    try {
-                        loaded = host.loadClass(name);
-                    } catch (ClassNotFoundException ignored) {
-                        // The bootstrap loader still owns the payload bootstrap classes.
+                // These two classes must remain the copies loaded by the initial payload loader;
+                // the host application must never shadow the bridge used by BindApplicationHook.
+                if (BOOTSTRAP_CLASS.equals(name) || BRIDGE_CLASS.equals(name)) {
+                    loaded = super.loadClass(name, false);
+                } else {
+                    ClassLoader host = hostClassLoader;
+                    if (host != null && host != this) {
+                        try {
+                            loaded = host.loadClass(name);
+                        } catch (ClassNotFoundException ignored) {
+                            // Fall through to the initial payload/system loader.
+                        }
                     }
+                    if (loaded == null) loaded = super.loadClass(name, false);
                 }
-                if (loaded == null) loaded = super.loadClass(name, false);
             }
             if (resolve) resolveClass(loaded);
             return loaded;
