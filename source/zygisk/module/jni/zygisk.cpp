@@ -4,6 +4,7 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <array>
 #include <cerrno>
 #include <cstring>
 #include <string>
@@ -15,6 +16,16 @@ namespace {
 constexpr char kQQ[] = "com.tencent.mobileqq";
 constexpr char kTIM[] = "com.tencent.tim";
 constexpr char kBootstrap[] = "me.teble.xposed.autodaily.zygisk.Bootstrap";
+#if defined(__aarch64__)
+constexpr char kAbi[] = "arm64-v8a";
+#elif defined(__arm__)
+constexpr char kAbi[] = "armeabi-v7a";
+#else
+#error Unsupported Zygisk ABI
+#endif
+constexpr const char *kNativeLibraries[] = {
+    "liblsplant.so", "libdobby.so", "libxautodaily_hook.so"
+};
 
 std::string from_java(JNIEnv *env, jstring s) {
     if (!s) return {};
@@ -33,9 +44,9 @@ bool has_process_prefix(const std::string &process, const char *package_name) {
 bool target(const std::string &p) {
     return has_process_prefix(p, kQQ) || has_process_prefix(p, kTIM);
 }
-bool copy_payload(int fd, const std::string &dst) {
+bool copy_fd_to_path(int fd, const std::string &dst, mode_t mode) {
     if (lseek(fd, 0, SEEK_SET) < 0) return false;
-    int out = open(dst.c_str(), O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0600);
+    int out = open(dst.c_str(), O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC | O_NOFOLLOW, mode);
     if (out < 0) return false;
     char buf[65536];
     bool ok = true;
@@ -52,6 +63,7 @@ bool copy_payload(int fd, const std::string &dst) {
         if (!ok) break;
     }
     if (fsync(out) != 0) ok = false;
+    if (fchmod(out, mode) != 0) ok = false;
     close(out);
     return ok;
 }
@@ -84,14 +96,28 @@ public:
         app_data_ = from_java(env_, args->app_data_dir);
         int dir = api_->getModuleDir();
         if (dir < 0) { LOGE("getModuleDir failed"); return; }
-        payload_fd_ = openat(dir, "payload.apk", O_RDONLY | O_CLOEXEC);
-        close(dir);
+        payload_fd_ = openat(dir, "payload.apk", O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
         if (payload_fd_ < 0 || !api_->exemptFd(payload_fd_)) {
             LOGE("payload APK unavailable or FD exemption failed");
             if (payload_fd_ >= 0) close(payload_fd_);
             payload_fd_ = -1;
+            close(dir);
             return;
         }
+        for (size_t i = 0; i < native_lib_fds_.size(); ++i) {
+            const std::string relative = std::string("native-libs/") + kAbi + "/" + kNativeLibraries[i];
+            native_lib_fds_[i] = openat(dir, relative.c_str(), O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+            struct stat st {};
+            if (native_lib_fds_[i] < 0 || fstat(native_lib_fds_[i], &st) != 0
+                    || !S_ISREG(st.st_mode) || st.st_size <= 0
+                    || !api_->exemptFd(native_lib_fds_[i])) {
+                LOGE("required native support library unavailable: %s", relative.c_str());
+                close(dir);
+                close_staged_fds();
+                return;
+            }
+        }
+        close(dir);
         enabled_ = true;
         LOGI("prepared for %s", process_.c_str());
     }
@@ -115,11 +141,31 @@ public:
             close(payload_fd_); payload_fd_ = -1; return;
         }
         std::string apk = cache + "/xautodaily-payload.apk";
-        if (!copy_payload(payload_fd_, apk)) {
+        if (!copy_fd_to_path(payload_fd_, apk, 0600)) {
             LOGE("payload staging failed: %s", strerror(errno));
-            close(payload_fd_); payload_fd_ = -1; return;
+            close_staged_fds(); return;
         }
         close(payload_fd_); payload_fd_ = -1;
+
+        const std::string native_root = cache + "/xautodaily-native-libs";
+        if (mkdir(native_root.c_str(), 0700) != 0 && errno != EEXIST) {
+            LOGE("cannot create native support directory: %s", strerror(errno));
+            close_staged_fds(); return;
+        }
+        const std::string native_dir = native_root + "/" + kAbi;
+        if (mkdir(native_dir.c_str(), 0700) != 0 && errno != EEXIST) {
+            LOGE("cannot create ABI support directory: %s", strerror(errno));
+            close_staged_fds(); return;
+        }
+        for (size_t i = 0; i < native_lib_fds_.size(); ++i) {
+            const std::string destination = native_dir + "/" + kNativeLibraries[i];
+            if (!copy_fd_to_path(native_lib_fds_[i], destination, 0700)) {
+                LOGE("native support library staging failed: %s", kNativeLibraries[i]);
+                close_staged_fds(); return;
+            }
+            close(native_lib_fds_[i]);
+            native_lib_fds_[i] = -1;
+        }
 
         // ActivityThread.currentActivityThread() is still null in postAppSpecialize. Load only
         // the bootstrap with the system loader; it arms a one-shot handleBindApplication hook
@@ -167,9 +213,17 @@ public:
     }
 
 private:
+    void close_staged_fds() {
+        if (payload_fd_ >= 0) { close(payload_fd_); payload_fd_ = -1; }
+        for (int &fd : native_lib_fds_) {
+            if (fd >= 0) { close(fd); fd = -1; }
+        }
+    }
+
     zygisk::Api *api_ = nullptr;
     JNIEnv *env_ = nullptr;
     int payload_fd_ = -1;
+    std::array<int, 3> native_lib_fds_{{-1, -1, -1}};
     bool enabled_ = false;
     std::string process_, app_data_;
 };

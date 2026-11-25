@@ -65,6 +65,8 @@ public final class Bootstrap {
         ensureDirectory(nativeDir, "native cache");
 
         extractNativeLibraries(apk, abi, nativeDir);
+        copyExternalNativeLibraries(new File(apk.getParentFile(),
+                "xautodaily-native-libs/" + abi), nativeDir);
         HostClassLoaderBridge bridge = new HostClassLoaderBridge(Bootstrap.class.getClassLoader());
         hostBridge = bridge;
         ModuleClassLoader moduleLoader = new ModuleClassLoader(
@@ -254,6 +256,38 @@ public final class Bootstrap {
                 target.setReadable(true, false);
                 target.setExecutable(true, false);
             }
+        }
+    }
+
+    /** The original LSPosed APK predates this port's LSPlant/Dobby bridge. The Zygisk
+     * installer therefore stages those support libraries beside the exact, unmodified APK.
+     */
+    private static void copyExternalNativeLibraries(File sourceDir, File outputDir) throws Exception {
+        String[] required = {"liblsplant.so", "libdobby.so", "libxautodaily_hook.so"};
+        byte[] buffer = new byte[32 * 1024];
+        for (String name : required) {
+            File source = new File(sourceDir, name);
+            File target = new File(outputDir, name);
+            if (target.isFile() && target.length() > 0) continue;
+            if (!source.isFile() || source.length() <= 0) {
+                throw new IllegalStateException("Required native library missing from APK and module: " + name);
+            }
+            File temporary = new File(outputDir, name + ".tmp");
+            try (InputStream input = new java.io.FileInputStream(source);
+                 FileOutputStream output = new FileOutputStream(temporary)) {
+                int count;
+                while ((count = input.read(buffer)) != -1) output.write(buffer, 0, count);
+                output.flush();
+                output.getFD().sync();
+            }
+            if (target.exists() && !target.delete()) {
+                throw new IllegalStateException("Cannot replace native library: " + target);
+            }
+            if (!temporary.renameTo(target)) {
+                throw new IllegalStateException("Cannot install native library: " + target);
+            }
+            target.setReadable(true, false);
+            target.setExecutable(true, false);
         }
     }
 

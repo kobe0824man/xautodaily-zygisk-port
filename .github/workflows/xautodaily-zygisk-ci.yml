@@ -56,6 +56,7 @@ jobs:
           export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/27.0.12077973"
           export PAYLOAD_APK="$GITHUB_WORKSPACE/source/app/build/outputs/apk/debug/app-debug.apk"
           export PAYLOAD_KIND=source-rebuild
+          export SUPPORT_APK="$GITHUB_WORKSPACE/source/app/build/outputs/apk/debug/app-debug.apk"
           source/zygisk/build-zygisk.sh
 
       - name: Verify APK payload metadata and native ELF exports

@@ -11,6 +11,10 @@ if [[ ! -f "$PAYLOAD" ]]; then
   echo "Set PAYLOAD_APK to the payload APK to package; no APK is synthesized by this script." >&2
   exit 1
 fi
+if [[ ! -f "$SUPPORT_APK" ]]; then
+  echo "Set SUPPORT_APK to a source-built APK containing LSPlant/Dobby hook libraries." >&2
+  exit 1
+fi
 case "$PAYLOAD_KIND" in
   source-rebuild|original) ;;
   *) echo "PAYLOAD_KIND must be source-rebuild or original" >&2; exit 1 ;;
@@ -22,6 +26,19 @@ if [[ "$PAYLOAD_KIND" == "original" && "$PAYLOAD_SHA256" != "2d337bb750d0187d6e6
 fi
 
 "$ROOT/zygisk/build-native.sh"
+# Keep the selected payload byte-for-byte intact. New hook backend libraries are staged
+# separately so the exact original LSPosed APK can remain the payload.
+rm -rf "$MODULE/native-libs"
+for ABI in arm64-v8a armeabi-v7a; do
+  mkdir -p "$MODULE/native-libs/$ABI"
+  for LIB in liblsplant.so libdobby.so libxautodaily_hook.so; do
+    unzip -p "$SUPPORT_APK" "lib/$ABI/$LIB" > "$MODULE/native-libs/$ABI/$LIB"
+    if [[ ! -s "$MODULE/native-libs/$ABI/$LIB" ]]; then
+      echo "SUPPORT_APK is missing lib/$ABI/$LIB" >&2
+      exit 1
+    fi
+  done
+done
 mkdir -p "$(dirname "$OUT")"
 cp "$PAYLOAD" "$MODULE/payload.apk"
 cat > "$MODULE/payload.info" <<INFO
@@ -32,7 +49,7 @@ payload_version=3.1.0-rc6
 INFO
 (
   cd "$MODULE"
-  zip -qr "$OUT" META-INF module.prop customize.sh uninstall.sh zygisk payload.apk payload.info licenses
+  zip -qr "$OUT" META-INF module.prop customize.sh uninstall.sh zygisk native-libs payload.apk payload.info licenses
 )
 echo "Created candidate module archive: $OUT"
 echo "Payload kind: $PAYLOAD_KIND"

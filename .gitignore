@@ -4,3 +4,6 @@
 /.productos-agent-busy
 /.productos-pull-complete
 /.productos-stack
+
+# Extracted support libraries are generated from SUPPORT_APK during packaging.
+source/zygisk/module/native-libs/
