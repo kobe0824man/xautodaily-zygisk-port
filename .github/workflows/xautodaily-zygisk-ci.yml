@@ -10,6 +10,16 @@ on:
 permissions:
   contents: read
 
+# One build per commit, and never a build that is cancelled by another one. The group carries
+# the commit SHA, so a new commit does not share a group with the build it supersedes and the
+# two run side by side; cancel-in-progress is off, so a second run of the *same* commit - the
+# push trigger and a manual dispatch both happen in this project - waits its turn instead of
+# killing the build that is already under way. Minutes are not the constraint here: this
+# repository is public, so its runners come from the unlimited free pool.
+concurrency:
+  group: zygisk-ci-${{ github.ref }}-${{ github.sha }}
+  cancel-in-progress: false
+
 jobs:
   android-build:
     runs-on: ubuntu-24.04
