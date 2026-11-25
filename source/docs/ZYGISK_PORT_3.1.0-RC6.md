@@ -128,6 +128,22 @@
   - Consequently the publish step needs a credential that acts as `kobe0824man` itself. The
     relocation tool reads it from `GITHUB_PERSONAL_TOKEN` and refuses to push without it.
 
+- **Published to the personal CI host**: the port branch and `main` are now on
+  `kobe0824man/xautodaily-zygisk-port`. Both refs were verified against the remote
+  (`zygisk-port-3.1.0-rc6` at `b831534`, `main` at `2b7e509`) and both workflow files read back
+  with HTTP 200, so the workflows are registered and `state: active` on the remote.
+- **A runner was finally allocated**: run `45554407487` started on the personal account and the
+  job progressed through "Set up job", "Checkout (including pinned native dependencies)" and
+  "Set up Java 21" — the checkout step fetching the Dobby submodule is the first time this
+  project has run on a real runner. This is the first evidence in the project that the
+  organisation's Actions environment was the only thing standing between the port and a build.
+- **Trigger quirk**: the push of the port branch did **not** create a workflow run (the run list
+  stayed at `total_count: 0` for more than a minute, while the workflows themselves were already
+  registered and active). A `workflow_dispatch` of the same workflow at the same ref created run
+  `45554407487` immediately. The `push` trigger is therefore not proven to work on this
+  repository and has to be verified on the next push — the build contract cannot rely on it
+  until it has.
+
 - **Device test**: no rooted Android device or emulator with QQ/TIM has been used. The new `handleBindApplication` timing, ART symbol resolver, constructor original-call path, Tinker loader update, native dependencies, and both ABIs remain unverified at runtime.
 - **Original APK bytes**: the exact APK is stored remotely at `public/payloads/xautodaily/XAutoDaily_3.1.0-rc6.apk`; a fresh download measured 9,581,427 bytes and SHA-256 `2d337bb750d0187d6e6eb06fa0429bd3e37b0f2841b904f6d01d08c6886413df`. It is byte-identical to the supplied attachment. However, it predates the port's Bootstrap/BindApplicationHook/HostClassLoaderBridge/HookRuntime/XposedHooker/NativeLoader classes. The packager now rejects it as a runtime payload even with a matching hash; only the source-rebuilt APK can run this Java bridge. No installable ZIP has been produced.
 
