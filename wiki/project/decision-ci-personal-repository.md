@@ -90,3 +90,11 @@ measured:
 
 So the publish step needs a credential that acts as `kobe0824man`, and it is one tested command
 away: `GITHUB_PERSONAL_TOKEN=… bash tools/relocate_ci_to_personal_repo.sh`.
+
+**Status: published and building.** The port branch and `main` are on the personal repository,
+both workflow files read back with HTTP 200, and the personal account has allocated a real
+runner for the first time in this project's history — the organisation's Actions environment
+really was the only thing in the way. The first run failed in "Set up Android SDK" before
+reaching the build (`android-actions/setup-android@v3` installs the retired `tools` package);
+the workflow now uses v4 and the actions have moved to their Node 24 majors. See
+[[concept-ci-build-contract]] for what the workflow and the Gradle build have to keep agreeing on.

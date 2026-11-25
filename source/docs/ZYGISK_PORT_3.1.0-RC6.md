@@ -143,6 +143,27 @@
   `45554407487` immediately. The `push` trigger is therefore not proven to work on this
   repository and has to be verified on the next push — the build contract cannot rely on it
   until it has.
+- **First run on a real runner, and the defect it found**: run `45554407487` allocated a runner
+  and passed "Set up job", "Checkout (including pinned native dependencies)" and "Set up Java 21",
+  then failed in "Set up Android SDK". `android-actions/setup-android@v3` defaults to installing
+  the retired `tools` package, which the SDK repository no longer carries, so `sdkmanager`
+  exited 1 with `Warning: Failed to find package 'tools'` and the job never reached the build.
+  The action's own log explains the path it took: it found the runner image's preinstalled
+  cmdline-tools (`Pkg.Revision=12.0`), judged it the wrong version, downloaded cmdline-tools
+  16.0 and then asked it for `tools`.
+  The workflow now uses `android-actions/setup-android@v4`, whose default package is
+  `platform-tools`, and installs the pinned platform/build-tools/NDK/CMake through whichever
+  cmdline-tools release is newest on the runner — the image's `latest` symlink can point at an
+  older release, so the version directories are sorted numerically instead. That selection was
+  exercised against a synthetic SDK layout before shipping.
+- **Actions moved to their current majors**: `checkout@v4`, `setup-java@v4`,
+  `upload-artifact@v4` and `setup-gradle@v4` all target Node 20, which the runners already
+  force onto Node 24 and will drop entirely; they are now `checkout@v7`, `setup-java@v6`,
+  `upload-artifact@v7` and `setup-gradle@v6`, all of which run on Node 24.
+- **The push trigger does work**: the next push created two runs — the self-check
+  (`45555003384`, success) and the real build (`45555003722`). The first push created none
+  because the workflow files were being registered at that moment, so the push event was
+  evaluated before the repository knew the workflows.
 
 - **Device test**: no rooted Android device or emulator with QQ/TIM has been used. The new `handleBindApplication` timing, ART symbol resolver, constructor original-call path, Tinker loader update, native dependencies, and both ABIs remain unverified at runtime.
 - **Original APK bytes**: the exact APK is stored remotely at `public/payloads/xautodaily/XAutoDaily_3.1.0-rc6.apk`; a fresh download measured 9,581,427 bytes and SHA-256 `2d337bb750d0187d6e6eb06fa0429bd3e37b0f2841b904f6d01d08c6886413df`. It is byte-identical to the supplied attachment. However, it predates the port's Bootstrap/BindApplicationHook/HostClassLoaderBridge/HookRuntime/XposedHooker/NativeLoader classes. The packager now rejects it as a runtime payload even with a matching hash; only the source-rebuilt APK can run this Java bridge. No installable ZIP has been produced.

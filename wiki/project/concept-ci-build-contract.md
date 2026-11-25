@@ -52,5 +52,19 @@ verification step stops finding the symbol.
 `add_subdirectory(../../../../zygisk/third_party/Dobby dobby_build)`. A checkout without
 `submodules: recursive` cannot configure the native build at all.
 
+**The actions themselves are a coupling to the runner runtime.** Every action major that targets
+Node 20 is a warning now and a failure later: the runners force Node 20 actions onto Node 24
+today and will drop the runtime entirely. `checkout@v4`, `setup-java@v4`, `upload-artifact@v4`
+and `setup-gradle@v4` were all in that category; they are now `checkout@v7`, `setup-java@v6`,
+`upload-artifact@v7` and `setup-gradle@v6`.
+
+**`android-actions/setup-android` installs SDK packages, and its default package list changed.**
+Version 3 defaulted to the `tools` package, which the SDK repository retired: on a cold runner
+the job died with `Warning: Failed to find package 'tools'` before reaching the build. Version 4
+defaults to `platform-tools`. The action is also not the only way in — the pinned packages can be
+installed straight through `sdkmanager`, and the version directories under
+`$ANDROID_HOME/cmdline-tools` have to be sorted numerically, because the runner image's `latest`
+symlink can point at an older release than the one the action just installed.
+
 See [[concept-port-validation]] for what each of these checks is allowed to prove, and
 [[decision-ci-personal-repository]] for where the workflow runs.
