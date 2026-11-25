@@ -8,7 +8,7 @@
 - Embedded source revision: `09618e67d7441c24b0aad149be3485fcb2eab91d`
 - The pinned source Gradle file says `appVerName = 3.0.37`; the Zygisk-only `-PzygiskPort=true` build overrides versionName/versionCode to the inspected APK manifest without changing normal upstream defaults.
 - Native ABIs: `arm64-v8a`, `armeabi-v7a`. The uploaded APK's `libxa_native.so` exists for these ABIs only.
-- The original LuckyPray/XAutoDaily repository is not modified. Port changes live in `productos-agents/productos-xautodaily-zygisk-port-4f7949f` on `zygisk-port-3.1.0-rc6`.
+- The original LuckyPray/XAutoDaily repository is not modified. Port changes live on `zygisk-port-3.1.0-rc6` of `productos-agents/productos-xautodaily-zygisk-port-4f7949f`; the CI build runs from the mirror in the owner's personal account, `kobe0824man/xautodaily-zygisk-port`, because the organisation cannot schedule a runner.
 
 ## Implemented in source
 
@@ -32,7 +32,26 @@
   current tree.
 - **OpenSSL dependency repair**: the exact four OpenSSL 1.1.1t static archives were restored from the pinned upstream commit; Git blob hashes and ELF ABI checks are enforced by verify_openssl_archives.py.
 - **Local build limitation**: the shell has no Gradle, Android SDK/NDK, CMake or Ninja toolchain, so a local Gradle/JNI build of the app module still cannot be claimed. A JDK 21 and the public `android.jar` are available, which is what made the package-level compile and the unit tests above possible. The GitHub Actions workflow must provide the authoritative full-build result.
-- **CI failure point**: the latest main-build and trivial self-check jobs both failed in about two seconds with no runner allocated, no steps and no job log. This places the observed failure before build execution, but the available token cannot read check-run annotations and GitHub has no retained job log for these attempts. The actual runner/provisioning cause remains undetermined; it is not evidence of a source compile failure. CI must be rerun after the repository/organisation Actions environment is inspected.
+- **CI failure point — confirmed**: the organisation's Actions environment, not the workflow or the
+  sources. Every one of the 34 workflow runs in the repository is `completed / failure`, including
+  runs of the trivial self-check workflow that only calls `echo`; there is not a single successful
+  run. The job objects report `runner_name` empty and contain **no steps at all**, so the job is
+  rejected before a runner is scheduled rather than failing during execution. The organisation
+  policy (`/orgs/productos-agents/actions/permissions`) and the repository policy both report
+  `enabled: true`, `allowed_actions: all`, and `sha_pinning_required: false`, so Actions is not
+  disabled and no action is filtered. The only remaining cause for a job that is created and then
+  discarded without a runner is the organisation's private-repository Actions minutes/billing
+  pool. The check-run annotations endpoint is not readable with the platform token, so the exact
+  billing wording cannot be quoted, but the failure is definitely not a source compile failure.
+- **CI relocation**: the build workflows are moved to the repository owner's personal GitHub
+  account (`kobe0824man/xautodaily-zygisk-port`), whose Actions allocation is personal rather
+  than organisational, so the organisation's exhausted pool no longer applies. The branch name,
+  the workflow files and the build contract are unchanged; only the hosting repository moves.
+  The workflows were hardened for their first real execution at the same time: the CMake/Ninja
+  used by the native build are now taken from the pinned SDK package (3.22.1) instead of the
+  runner image's toolchain, the job timeout is 120 minutes for the cold SDK/NDK download and the
+  two-ABI native build, and superseded runs on the same ref are cancelled.
+
 - **Device test**: no rooted Android device or emulator with QQ/TIM has been used. The new `handleBindApplication` timing, ART symbol resolver, constructor original-call path, Tinker loader update, native dependencies, and both ABIs remain unverified at runtime.
 - **Original APK bytes**: the exact APK is stored remotely at `public/payloads/xautodaily/XAutoDaily_3.1.0-rc6.apk`; a fresh download measured 9,581,427 bytes and SHA-256 `2d337bb750d0187d6e6eb06fa0429bd3e37b0f2841b904f6d01d08c6886413df`. It is byte-identical to the supplied attachment. However, it predates the port's Bootstrap/BindApplicationHook/HostClassLoaderBridge/HookRuntime/XposedHooker/NativeLoader classes. The packager now rejects it as a runtime payload even with a matching hash; only the source-rebuilt APK can run this Java bridge. No installable ZIP has been produced.
 

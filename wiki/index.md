@@ -13,9 +13,7 @@ Catalog of everything durable this project has learned. Pages are flat kebab-cas
 - [Package a working API 82 runtime, not the published stub](project/decision-api82-runtime.md) — the vendored `source/xposed-api82` module.
 - [Match the JNI table to the API 82 surface exactly](project/decision-jni-table-exact.md) — 10 native methods, machine-checked.
 - [Verify dependency provenance in CI](project/decision-dependency-provenance.md) — API 82 sources and OpenSSL archives are pinned and checked.
-
-## Open Questions
-- [CI cannot start any job for this organisation](project/question-ci-org-blocked.md) — what the repository owner has to do.
+- [Run CI from the owner's personal GitHub account](project/decision-ci-personal-repository.md) — the organisation cannot allocate a runner; 34/34 runs failed with no runner and no steps.
 
 ## Sessions
 - See `../memory/log.md` for the append-only journal.

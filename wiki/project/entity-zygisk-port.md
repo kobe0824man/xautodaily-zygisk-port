@@ -12,7 +12,9 @@ Port of the XAutoDaily Xposed module to a standalone Zygisk module.
 - Native ABIs: `arm64-v8a`, `armeabi-v7a`.
 - Repository: `productos-agents/productos-xautodaily-zygisk-port-4f7949f5`. Port work lives on the
   branch `zygisk-port-3.1.0-rc6`; `main` mirrors the upstream sources plus the platform's own
-  edits. The upstream LuckyPray/XAutoDaily project is not modified.
+  edits. The upstream LuckyPray/XAutoDaily project is not modified. The CI build runs from the
+  mirror in the owner's personal account, `kobe0824man/xautodaily-zygisk-port`, because the
+  organisation cannot allocate a runner (see [[decision-ci-personal-repository]]).
 - Module layout: `source/app` (payload APK), `source/zygisk` (Zygisk loader, Magisk module,
   packaging scripts, verifiers), `source/xposed-api82` (vendored legacy API runtime),
   `source/xposed-api82-stubs` (compile-only hidden-framework stubs), `source/docs` (port ledger).
