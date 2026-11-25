@@ -21,7 +21,7 @@ public final class HookRuntime {
     }
 
     public static Object invokeOriginal(Member target, Object thisObject, Object[] arguments)
-            throws IllegalAccessException, InvocationTargetException {
+            throws IllegalAccessException, InvocationTargetException, InstantiationException {
         if (target == null) throw new IllegalArgumentException("method must not be null");
         Object[] args = arguments == null ? new Object[0] : arguments;
         Method backup = BACKUPS.get(target);
@@ -63,5 +63,10 @@ public final class HookRuntime {
 
     static boolean hasBackup(Member target) {
         return BACKUPS.containsKey(target);
+    }
+
+    /** Drops every registered backup. Used by unit tests to isolate the registry per case. */
+    static void clearBackups() {
+        BACKUPS.clear();
     }
 }
