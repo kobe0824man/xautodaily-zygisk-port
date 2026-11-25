@@ -43,6 +43,21 @@ upstream XAutoDaily project, so nothing is disclosed that is not already publish
 organisation repository remains the source of record and keeps the full history; the personal
 repository is the build host.
 
+**The publishing token has to act as the owner.** The platform's own credential is the
+`productos-si` service account: it can *read* `kobe0824man/xautodaily-zygisk-port` but the API
+reports `push: false` on it, and it cannot read that repository's Actions permissions at all
+(403). Nothing in the platform can push to the owner's personal repository on the owner's
+behalf. The relocation therefore needs a token whose identity is `kobe0824man` itself, with
+`repo` for the push and `workflow` for the files under `.github/workflows`.
+
+**The relocation tool is tested before it is pointed at the real API.** It is exercised against a
+local stand-in for the GitHub REST API and a local bare repository standing in for the remote:
+the identity check, the scope check, the already-exists branch, the push of both branches, the
+ref verification and the run listing all behave, and a token without the `workflow` scope is
+refused with exit code 5 before anything is pushed. That test found a real defect — the scope
+parser took only the first field of the scope list, so it read `repo, workflow` as `repo,` and
+would have refused a perfectly good token.
+
 **What changed in the workflows at the same time** (the build had never executed, so it was
 hardened before its first real run):
 
