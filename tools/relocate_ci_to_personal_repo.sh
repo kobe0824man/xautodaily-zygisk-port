@@ -53,6 +53,23 @@ if [[ "$LOGIN" != "$OWNER" ]]; then
   exit 3
 fi
 
+# GitHub rejects a push that creates or updates a file under .github/workflows when the token
+# lacks the `workflow` scope, and it rejects the whole push rather than the workflow files
+# alone. Check the scopes before pushing so the cause is not buried in a ref update error.
+SCOPES="$(curl -sS -m 30 -D - -o /dev/null "${AUTH[@]}" "$API/user" \
+          | tr -d '\r' | awk 'tolower($1) == "x-oauth-scopes:" {print $2}')"
+if [[ -z "$SCOPES" ]]; then
+  echo "scopes: not reported (fine-grained token) - the push itself is the only check"
+elif [[ ",$SCOPES," != *",workflow,"* ]]; then
+  echo "Refusing to continue: the token reports scopes [$SCOPES] but not 'workflow'." >&2
+  echo "GitHub would reject the push of .github/workflows/*. Reissue the token with the" >&2
+  echo "'workflow' scope (classic PAT), or with Contents + Workflows read/write" >&2
+  echo "(fine-grained PAT), or the CI workflows will never reach the personal repository." >&2
+  exit 5
+else
+  echo "scopes: $SCOPES"
+fi
+
 say "repository $OWNER/$REPO_NAME"
 CODE="$(curl -sS -m 30 -o /tmp/relocate-repo.json -w '%{http_code}' "${AUTH[@]}" "$API/repos/$OWNER/$REPO_NAME")"
 if [[ "$CODE" == "404" ]]; then
