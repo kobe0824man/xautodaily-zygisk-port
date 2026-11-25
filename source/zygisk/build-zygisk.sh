@@ -37,7 +37,7 @@ for CLASS in Bootstrap BindApplicationHook HostClassLoaderBridge HookRuntime Xpo
   FOUND=0
   while IFS= read -r DEX; do
     [[ -n "$DEX" ]] || continue
-    if unzip -p "$PAYLOAD" "$DEX" | strings | grep -Fq "me/teble/xposed/autodaily/zygisk/$CLASS"; then
+    if unzip -p "$PAYLOAD" "$DEX" | grep -aFq "me/teble/xposed/autodaily/zygisk/$CLASS"; then
       FOUND=1
       break
     fi
