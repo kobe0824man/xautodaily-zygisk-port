@@ -1,0 +1,6 @@
+XAutoDaily Zygisk port dependency notices
+
+- LSPlant 6.4: GNU Lesser General Public License v3.0; license text is LSPLANT-LGPL-3.0.txt.
+- Dobby: Apache License 2.0; license text is DOBBY-APACHE-2.0.txt.
+- Xposed API 82: Apache License 2.0; license text is APACHE-2.0.txt.
+- Magisk module update-binary: GPL-3.0; license text is MAGISK-GPL-3.0.txt.

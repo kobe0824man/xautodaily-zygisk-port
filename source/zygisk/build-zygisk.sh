@@ -23,7 +23,7 @@ payload_version=3.1.0-rc6
 INFO
 (
   cd "$MODULE"
-  zip -qr "$OUT" META-INF module.prop customize.sh uninstall.sh zygisk payload.apk payload.info
+  zip -qr "$OUT" META-INF module.prop customize.sh uninstall.sh zygisk payload.apk payload.info licenses
 )
 echo "Created candidate module archive: $OUT"
 echo "Payload kind: $PAYLOAD_KIND"

@@ -10,21 +10,19 @@ import org.junit.Test;
 
 public class HookRuntimeTest {
     public static final class Sample {
-        final int seed;
+        int seed;
 
         public Sample(int seed) { this.seed = seed; }
         public int add(int value) { return seed + value; }
+        public int backupAdd(int value) { return seed + value + 100; }
+        public void backupConstructor(int value) { this.seed = value; }
         public static int multiply(int value) { return value * 2; }
-    }
-
-    public static int originalAdd(Sample receiver, int value) {
-        return receiver.seed + value + 100;
     }
 
     @Test
     public void invokesLsPlantBackupWithExplicitReceiver() throws Exception {
         Method target = Sample.class.getDeclaredMethod("add", int.class);
-        Method backup = HookRuntimeTest.class.getDeclaredMethod("originalAdd", Sample.class, int.class);
+        Method backup = Sample.class.getDeclaredMethod("backupAdd", int.class);
         Sample receiver = new Sample(7);
         HookRuntime.registerBackup(target, backup);
 
@@ -32,6 +30,19 @@ public class HookRuntimeTest {
 
         assertEquals(112, result);
         assertTrue(HookRuntime.hasBackup(target));
+    }
+
+    @Test
+    public void invokesConstructorBackupOnTheConstructedReceiver() throws Exception {
+        Constructor<Sample> target = Sample.class.getConstructor(int.class);
+        Method backup = Sample.class.getDeclaredMethod("backupConstructor", int.class);
+        Sample receiver = new Sample(1);
+        HookRuntime.registerBackup(target, backup);
+
+        Object result = HookRuntime.invokeOriginal(target, receiver, new Object[]{23});
+
+        assertEquals(null, result);
+        assertEquals(23, receiver.seed);
     }
 
     @Test

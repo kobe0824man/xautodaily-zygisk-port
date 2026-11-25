@@ -26,15 +26,13 @@ public final class HookRuntime {
         Object[] args = arguments == null ? new Object[0] : arguments;
         Method backup = BACKUPS.get(target);
         if (backup != null) {
-            Object[] backupArgs = args;
             boolean isStatic = target instanceof Method && Modifier.isStatic(target.getModifiers());
-            if (!isStatic) {
-                backupArgs = new Object[args.length + 1];
-                backupArgs[0] = thisObject;
-                System.arraycopy(args, 0, backupArgs, 1, args.length);
+            Object receiver = isStatic ? null : thisObject;
+            if (target instanceof Constructor<?> && receiver == null) {
+                receiver = allocateUninitialized(((Constructor<?>) target).getDeclaringClass());
             }
             backup.setAccessible(true);
-            return backup.invoke(null, backupArgs);
+            return backup.invoke(receiver, args);
         }
         if (target instanceof Method) {
             Method method = (Method) target;
@@ -47,6 +45,20 @@ public final class HookRuntime {
             return constructor.newInstance(args);
         }
         throw new IllegalArgumentException("Only methods and constructors are supported: " + target);
+    }
+
+    private static Object allocateUninitialized(Class<?> type) {
+        try {
+            Class<?> unsafeClass = Class.forName("sun.misc.Unsafe");
+            java.lang.reflect.Field singleton = unsafeClass.getDeclaredField("theUnsafe");
+            singleton.setAccessible(true);
+            Object unsafe = singleton.get(null);
+            Method allocate = unsafeClass.getMethod("allocateInstance", Class.class);
+            return allocate.invoke(unsafe, type);
+        } catch (ReflectiveOperationException error) {
+            throw new UnsupportedOperationException(
+                    "Cannot allocate an instance for invokeOriginalMethod(Constructor)", error);
+        }
     }
 
     static boolean hasBackup(Member target) {
