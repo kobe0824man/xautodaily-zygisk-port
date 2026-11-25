@@ -25,13 +25,13 @@ PAYLOAD_APK=source/app/build/outputs/apk/debug/app-debug.apk \
   PAYLOAD_KIND=source-rebuild source/zygisk/build-zygisk.sh
 ```
 
-The packaging script requires an explicit APK and records its kind and SHA-256 in `payload.info`. `PAYLOAD_KIND=original` is accepted only when the APK SHA-256 exactly matches the uploaded attachment; it never fabricates or mislabels a payload. The CI workflow builds the source-rebuilt debug APK; that APK is not byte-identical to the uploaded original.
+The packaging script requires an explicit source-rebuilt APK and verifies that all six Zygisk Java bridge classes and all three native hook libraries are present. The uploaded original APK is retained separately in ProductOS project storage and its SHA-256 has been verified, but it predates these bridge classes; even with an exact hash it cannot function as the runnable Zygisk payload. PAYLOAD_KIND=original is therefore deliberately rejected rather than producing a non-working installer. The CI workflow packages a source-rebuilt debug APK, which is not byte-identical to the uploaded original.
 
 ## Current limits
 
 - Full `XResources`/`XModuleResources` replacement and package-resource callbacks are not implemented.
 - `setObjectClass` and `cloneToSubclass` are explicitly unsupported. File-before-fork hooks are no-ops in an already-specialized app process.
 - Constructor original-method invocation, Tinker loader replacement, ART symbol resolution, and both ARM ABIs need real QQ/TIM device tests across Android versions.
-- The original chat attachment is not present in the remote ProductOS project. No ZIP built from this repository may be described as containing the original APK until the exact bytes are supplied as `PAYLOAD_APK`.
+- The exact original APK is present in ProductOS project storage at `public/payloads/xautodaily/XAutoDaily_3.1.0-rc6.apk` and its downloaded SHA-256 matches the user-supplied hash. It is byte-identical to the supplied attachment. It is not used as the runtime payload because it lacks the Zygisk bridge classes added by this port.
 
 See `source/docs/ZYGISK_PORT_3.1.0-RC6.md` for the implementation and validation ledger.
