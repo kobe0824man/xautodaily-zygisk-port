@@ -1,0 +1,3 @@
+[submodule "source/zygisk/third_party/Dobby"]
+	path = source/zygisk/third_party/Dobby
+	url = https://github.com/jmpews/Dobby.git
