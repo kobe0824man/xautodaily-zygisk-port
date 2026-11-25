@@ -53,6 +53,14 @@ GITHUB_PERSONAL_TOKEN=github_pat_xxx bash tools/relocate_ci_to_personal_repo.sh
 The token needs the `repo` scope (create and push the repository) and the `workflow` scope
 (push the files under `.github/workflows` - GitHub rejects workflow updates without it).
 
+Once the branch is published, `tools/ci_run_status.sh` reports what the build is doing and, for
+a failed run, prints every job and step with its conclusion:
+
+```bash
+bash tools/ci_run_status.sh            # list the latest runs of the port branch
+bash tools/ci_run_status.sh <run-id>  # jobs and steps of one run
+```
+
 ## Local verification
 
 The sandbox has no Gradle, Android SDK/NDK, CMake or Ninja, so the Gradle build cannot run
