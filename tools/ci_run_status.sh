@@ -69,5 +69,5 @@ if not runs:
     print("  no runs yet")
 for r in runs:
     print("  {} | {:28} | {:10} | {:9} | {}".format(
-        r["id"], r["name"][:28], r["status"], r.get("conclusion"), r["html_url"]))
+        r["id"], r["name"][:28], r["status"], r.get("conclusion") or "-", r["html_url"]))
 '
