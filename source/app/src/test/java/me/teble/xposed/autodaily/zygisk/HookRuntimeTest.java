@@ -1,7 +1,7 @@
 package me.teble.xposed.autodaily.zygisk;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
@@ -31,7 +31,7 @@ public class HookRuntimeTest {
         Object result = HookRuntime.invokeOriginal(target, receiver, new Object[]{5});
 
         assertEquals(112, result);
-        assertNotNull(HookRuntime.hasBackup(target) ? Boolean.TRUE : null);
+        assertTrue(HookRuntime.hasBackup(target));
     }
 
     @Test

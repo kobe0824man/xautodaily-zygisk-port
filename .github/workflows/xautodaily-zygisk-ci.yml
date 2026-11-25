@@ -47,19 +47,19 @@ jobs:
             :app:testDebugUnitTest :app:assembleDebug
 
       - name: Build Zygisk loader for both ABIs and package candidate
-        env:
-          ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/27.0.12077973
-          PAYLOAD_APK: ${{ github.workspace }}/source/app/build/outputs/apk/debug/app-debug.apk
-          PAYLOAD_KIND: source-rebuild
         run: |
+          export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/27.0.12077973"
+          export PAYLOAD_APK="$GITHUB_WORKSPACE/source/app/build/outputs/apk/debug/app-debug.apk"
+          export PAYLOAD_KIND=source-rebuild
           source/zygisk/build-zygisk.sh
 
       - name: Verify APK payload metadata and native ELF exports
         shell: bash
         run: |
           AAPT="$ANDROID_HOME/build-tools/36.0.0/aapt"
-          "$AAPT" dump badging source/app/build/outputs/apk/debug/app-debug.apk | grep -E "package:|application-label"
-          unzip -l source/app/build/outputs/apk/debug/app-debug.apk | grep -E 'lib/(arm64-v8a|armeabi-v7a)/lib(xautodaily_hook|lsplant)\\.so'
+          BADGING=$("$AAPT" dump badging source/app/build/outputs/apk/debug/app-debug.apk)
+          echo "$BADGING" | grep -F "package: name='me.teble.xposed.autodaily' versionCode='26112014' versionName='3.1.0-rc6'"
+          unzip -l source/app/build/outputs/apk/debug/app-debug.apk | grep -E 'lib/(arm64-v8a|armeabi-v7a)/lib(xautodaily_hook|lsplant|dobby)\.so'
           for abi in arm64-v8a armeabi-v7a; do
             file "source/zygisk/module/zygisk/$abi.so"
             readelf -h "source/zygisk/module/zygisk/$abi.so" | grep -E 'Class:|Machine:'

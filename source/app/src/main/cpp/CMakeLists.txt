@@ -13,6 +13,8 @@ add_subdirectory(../../../../dexkit/DexKit/Core dexkit_static)
 set(DOBBY_BUILD_EXAMPLE OFF CACHE BOOL "" FORCE)
 set(DOBBY_BUILD_TEST OFF CACHE BOOL "" FORCE)
 add_subdirectory(../../../../zygisk/third_party/Dobby dobby_build)
+# Dobby sets a directory-wide C++17 default; restore the upstream app standard for xa_native.
+set(CMAKE_CXX_STANDARD 23)
 find_package(lsplant REQUIRED CONFIG)
 
 add_library(crypto STATIC IMPORTED)
@@ -54,5 +56,5 @@ target_link_libraries(xa_native
 add_library(xautodaily_hook SHARED zygisk_hook.cpp)
 target_compile_features(xautodaily_hook PRIVATE cxx_std_17)
 target_compile_options(xautodaily_hook PRIVATE -Wall -Wextra -fvisibility=hidden -fvisibility-inlines-hidden)
-target_link_libraries(xautodaily_hook PRIVATE lsplant::lsplant dobby_static ${log-lib} dl)
-set_target_properties(xautodaily_hook PROPERTIES OUTPUT_NAME "xautodaily_hook")
+target_link_libraries(xautodaily_hook PRIVATE lsplant::lsplant dobby ${log-lib} dl)
+set_target_properties(xautodaily_hook PROPERTIES OUTPUT_NAME "xautodaily_hook" CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)

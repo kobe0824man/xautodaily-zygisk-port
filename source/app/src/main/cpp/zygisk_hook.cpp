@@ -27,6 +27,8 @@ constexpr const char *kTag = "XAutoDaily-Zygisk";
 struct ArtImage {
     std::string path;
     uintptr_t load_bias = 0;
+    const ElfW(Phdr) *program_headers = nullptr;
+    size_t program_header_count = 0;
     std::vector<uint8_t> bytes;
 };
 
@@ -42,6 +44,8 @@ int find_art_image(dl_phdr_info *info, size_t, void *opaque) {
     auto *image = static_cast<ArtImage *>(opaque);
     image->path = std::move(path);
     image->load_bias = static_cast<uintptr_t>(info->dlpi_addr);
+    image->program_headers = info->dlpi_phdr;
+    image->program_header_count = static_cast<size_t>(info->dlpi_phnum);
     return 1;
 }
 
@@ -56,7 +60,7 @@ bool load_art_image() {
         LOGW("Cannot open %s for ELF symbol fallback", g_art.path.c_str());
         return true; // dlsym may still resolve the required exported symbols.
     }
-    const auto end = input.tellg();
+    const std::streamoff end = input.tellg();
     if (end <= 0 || static_cast<uint64_t>(end) > 128ULL * 1024ULL * 1024ULL) {
         LOGW("Unexpected libart image size: %lld", static_cast<long long>(end));
         return true;
@@ -122,6 +126,108 @@ void *scan_elf_symbols(const std::vector<uint8_t> &bytes, uintptr_t load_bias,
     return nullptr;
 }
 
+template <typename Dyn, typename Sym, typename TypeFn>
+void *scan_loaded_dynamic_symbols(const ArtImage &image, std::string_view query,
+                                  bool prefix, TypeFn symbol_type) {
+    if (image.program_headers == nullptr || image.program_header_count == 0) return nullptr;
+    const Dyn *dynamic = nullptr;
+    size_t dynamic_count = 0;
+    for (size_t i = 0; i < image.program_header_count; ++i) {
+        const auto &header = image.program_headers[i];
+        if (header.p_type == PT_DYNAMIC) {
+            dynamic = reinterpret_cast<const Dyn *>(image.load_bias + header.p_vaddr);
+            dynamic_count = static_cast<size_t>(header.p_memsz / sizeof(Dyn));
+            break;
+        }
+    }
+    if (dynamic == nullptr || dynamic_count == 0) return nullptr;
+
+    uintptr_t symtab_address = 0;
+    uintptr_t strtab_address = 0;
+    uintptr_t hash_address = 0;
+    uintptr_t gnu_hash_address = 0;
+    size_t symbol_entry_size = sizeof(Sym);
+    for (size_t i = 0; i < dynamic_count && dynamic[i].d_tag != DT_NULL; ++i) {
+        const auto value = static_cast<uintptr_t>(dynamic[i].d_un.d_ptr);
+        switch (dynamic[i].d_tag) {
+            case DT_SYMTAB: symtab_address = value; break;
+            case DT_STRTAB: strtab_address = value; break;
+            case DT_HASH: hash_address = value; break;
+#ifdef DT_GNU_HASH
+            case DT_GNU_HASH: gnu_hash_address = value; break;
+#endif
+            case DT_SYMENT: symbol_entry_size = static_cast<size_t>(dynamic[i].d_un.d_val); break;
+            default: break;
+        }
+    }
+    auto relocate = [&](uintptr_t value) -> uintptr_t {
+        return value != 0 && value < image.load_bias ? image.load_bias + value : value;
+    };
+    symtab_address = relocate(symtab_address);
+    strtab_address = relocate(strtab_address);
+    hash_address = relocate(hash_address);
+    gnu_hash_address = relocate(gnu_hash_address);
+    if (symtab_address == 0 || strtab_address == 0 || symbol_entry_size != sizeof(Sym)) return nullptr;
+
+    size_t symbol_count = 0;
+    if (hash_address != 0) {
+        const auto *hash = reinterpret_cast<const uint32_t *>(hash_address);
+        symbol_count = hash[1]; // DT_HASH: nchain is the dynamic symbol count.
+    } else if (gnu_hash_address != 0) {
+        const auto *gnu_hash = reinterpret_cast<const uint32_t *>(gnu_hash_address);
+        const uint32_t bucket_count = gnu_hash[0];
+        const uint32_t symbol_offset = gnu_hash[1];
+        const uint32_t bloom_size = gnu_hash[2];
+        if (bucket_count > 1000000 || bloom_size > 1000000 || symbol_offset > 1000000) return nullptr;
+        const auto *bloom = reinterpret_cast<const uintptr_t *>(gnu_hash + 4);
+        const auto *buckets = reinterpret_cast<const uint32_t *>(bloom + bloom_size);
+        const auto *chains = buckets + bucket_count;
+        uint32_t maximum_symbol = symbol_offset == 0 ? 0 : symbol_offset - 1;
+        for (uint32_t i = 0; i < bucket_count; ++i) {
+            uint32_t index = buckets[i];
+            if (index < symbol_offset) continue;
+            for (size_t guard = 0; guard < 1000000; ++guard, ++index) {
+                const uint32_t chain = chains[index - symbol_offset];
+                maximum_symbol = std::max(maximum_symbol, index);
+                if ((chain & 1U) != 0) break;
+            }
+        }
+        symbol_count = static_cast<size_t>(maximum_symbol) + 1;
+    }
+    if (symbol_count == 0 || symbol_count > 1000000) return nullptr;
+
+    const auto *symbols = reinterpret_cast<const Sym *>(symtab_address);
+    const char *strings = reinterpret_cast<const char *>(strtab_address);
+    for (size_t i = 0; i < symbol_count; ++i) {
+        const auto &symbol = symbols[i];
+        if (symbol.st_name == 0 || symbol.st_shndx == SHN_UNDEF || symbol.st_value == 0) continue;
+        const uint8_t kind = symbol_type(symbol.st_info);
+        if (kind != STT_FUNC && kind != STT_NOTYPE) continue;
+        const char *candidate = strings + symbol.st_name;
+        const size_t length = strnlen(candidate, 1024);
+        if (length == 1024) continue;
+        const std::string_view symbol_name(candidate, length);
+        const bool matches = prefix
+                ? symbol_name.size() >= query.size() && symbol_name.compare(0, query.size(), query) == 0
+                : symbol_name == query;
+        if (!matches) continue;
+        const uintptr_t address = symbol.st_shndx == SHN_ABS
+                ? static_cast<uintptr_t>(symbol.st_value)
+                : image.load_bias + static_cast<uintptr_t>(symbol.st_value);
+        if (address != 0) return reinterpret_cast<void *>(address);
+    }
+    return nullptr;
+}
+
+void *scan_loaded_art(std::string_view query, bool prefix) {
+    if (sizeof(void *) == 8) {
+        return scan_loaded_dynamic_symbols<Elf64_Dyn, Elf64_Sym>(
+                g_art, query, prefix, [](unsigned char info) { return ELF64_ST_TYPE(info); });
+    }
+    return scan_loaded_dynamic_symbols<Elf32_Dyn, Elf32_Sym>(
+            g_art, query, prefix, [](unsigned char info) { return ELF32_ST_TYPE(info); });
+}
+
 void *scan_art_file(std::string_view query, bool prefix) {
     if (g_art.bytes.size() < EI_NIDENT || std::memcmp(g_art.bytes.data(), ELFMAG, SELFMAG) != 0) return nullptr;
     if (g_art.bytes[EI_CLASS] == ELFCLASS64) {
@@ -144,10 +250,12 @@ void *resolve_art_symbol(std::string_view name) {
     }
     if (void *address = dlsym(RTLD_DEFAULT, symbol.c_str())) return address;
     if (void *address = DobbySymbolResolver("libart.so", symbol.c_str())) return address;
+    if (void *address = scan_loaded_art(name, false)) return address;
     return scan_art_file(name, false);
 }
 
 void *resolve_art_prefix(std::string_view prefix) {
+    if (void *address = scan_loaded_art(prefix, true)) return address;
     return scan_art_file(prefix, true);
 }
 

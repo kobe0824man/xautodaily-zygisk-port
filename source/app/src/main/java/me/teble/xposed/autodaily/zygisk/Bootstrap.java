@@ -71,6 +71,7 @@ public final class Bootstrap {
         List<String> libraries = new ArrayList<>();
         addIfPresent(libraries, new File(nativeDir, "libc++_shared.so"));
         requireAndAdd(libraries, new File(nativeDir, "liblsplant.so"));
+        requireAndAdd(libraries, new File(nativeDir, "libdobby.so"));
         requireAndAdd(libraries, new File(nativeDir, "libxautodaily_hook.so"));
         loadNativeLibraries(moduleLoader, libraries.toArray(new String[0]));
 
@@ -243,6 +244,10 @@ public final class Bootstrap {
         }
 
         private static boolean isParentFirst(String name) {
+            // These Xposed compatibility classes are packaged in the module APK, not in the host framework.
+            if (name.equals("android.app.AndroidAppHelper") || name.startsWith("android.content.res.X")) {
+                return false;
+            }
             return name.startsWith("java.") || name.startsWith("javax.")
                     || name.startsWith("android.") || name.startsWith("dalvik.")
                     || name.startsWith("libcore.") || name.startsWith("sun.")
