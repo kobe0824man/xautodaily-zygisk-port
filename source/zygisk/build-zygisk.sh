@@ -3,9 +3,10 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 MODULE="$ROOT/zygisk/module"
-PAYLOAD="${PAYLOAD_APK:-}"
-PAYLOAD_KIND="${PAYLOAD_KIND:-source-rebuild}"
-OUT="${OUT_ZIP:-$ROOT/../build/XAutoDaily-Zygisk-3.1.0-rc6-${PAYLOAD_KIND}.zip}"
+PAYLOAD="$(printenv PAYLOAD_APK || true)"
+PAYLOAD_KIND="$(printenv PAYLOAD_KIND || printf 'source-rebuild')"
+SUPPORT_APK="$(printenv SUPPORT_APK || printf '%s' "$PAYLOAD")"
+OUT="$(printenv OUT_ZIP || printf '%s' "$ROOT/../build/XAutoDaily-Zygisk-3.1.0-rc6-$PAYLOAD_KIND.zip")"
 
 if [[ ! -f "$PAYLOAD" ]]; then
   echo "Set PAYLOAD_APK to the payload APK to package; no APK is synthesized by this script." >&2
@@ -19,15 +20,35 @@ case "$PAYLOAD_KIND" in
   source-rebuild|original) ;;
   *) echo "PAYLOAD_KIND must be source-rebuild or original" >&2; exit 1 ;;
 esac
+
 PAYLOAD_SHA256="$(sha256sum "$PAYLOAD" | awk '{print $1}')"
 if [[ "$PAYLOAD_KIND" == "original" && "$PAYLOAD_SHA256" != "2d337bb750d0187d6e6eb06fa0429bd3e37b0f2841b904f6d01d08c6886413df" ]]; then
-  echo "PAYLOAD_KIND=original requires the exact uploaded APK SHA-256 (2d337bb750d0187d6e6eb06fa0429bd3e37b0f2841b904f6d01d08c6886413df); refusing to mislabel another APK." >&2
+  echo "PAYLOAD_KIND=original requires the exact uploaded APK SHA-256; refusing to mislabel another APK." >&2
+  exit 1
+fi
+if [[ "$PAYLOAD_KIND" == "original" ]]; then
+  echo "The exact original APK is verified, but it lacks this port's Bootstrap/HookRuntime/XposedHooker Java classes. It cannot be the runnable Zygisk payload; use PAYLOAD_KIND=source-rebuild. Refusing to create a non-working installer." >&2
   exit 1
 fi
 
+# Refuse to package a source APK that omitted any runtime bridge classes.
+DEX_FILES="$(unzip -Z1 "$PAYLOAD" | grep -E '^classes([0-9]+)?[.]dex$' || true)"
+for CLASS in Bootstrap BindApplicationHook HostClassLoaderBridge HookRuntime XposedHooker NativeLoader; do
+  FOUND=0
+  while IFS= read -r DEX; do
+    [[ -n "$DEX" ]] || continue
+    if unzip -p "$PAYLOAD" "$DEX" | grep -aFq "me/teble/xposed/autodaily/zygisk/$CLASS"; then
+      FOUND=1
+      break
+    fi
+  done <<< "$DEX_FILES"
+  if [[ "$FOUND" != 1 ]]; then
+    echo "PAYLOAD_APK is missing required Zygisk Java bridge class: $CLASS" >&2
+    exit 1
+  fi
+done
+
 "$ROOT/zygisk/build-native.sh"
-# Keep the selected payload byte-for-byte intact. New hook backend libraries are staged
-# separately so the exact original LSPosed APK can remain the payload.
 rm -rf "$MODULE/native-libs"
 for ABI in arm64-v8a armeabi-v7a; do
   mkdir -p "$MODULE/native-libs/$ABI"
@@ -39,6 +60,7 @@ for ABI in arm64-v8a armeabi-v7a; do
     fi
   done
 done
+
 mkdir -p "$(dirname "$OUT")"
 cp "$PAYLOAD" "$MODULE/payload.apk"
 cat > "$MODULE/payload.info" <<INFO

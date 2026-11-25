@@ -14,7 +14,13 @@ This is an in-progress, source-based port of XAutoDaily 3.1.0-rc6. Its baseline 
 - LSPlant 6.4 provides ART method/constructor hooks and backup methods.
 - Dobby provides LSPlant's inline hook/unhook callbacks.
 - The JNI bridge resolves ART symbols through `dlsym`, Dobby's resolver, and loaded/on-disk ELF symbol tables.
-- The packaged legacy API is `de.robv.android.xposed:api:82`. Its Java dispatcher supplies callback priority/order, before/after semantics, `hookMethod`, `hookAllMethods`, `hookAllConstructors`, callback removal on `Unhook`, `XC_LoadPackage` and `IXposedHook*` types, and `XposedHelpers`.
+- The legacy API is `de.robv.android.xposed:api:82` (Apache-2.0). The published artifact is a
+  **compile-time stub** - every method body throws `RuntimeException("Stub!")` - which LSPosed
+  hides behind the framework's own classes. The Zygisk payload has no framework, so it packages
+  the upstream API 82 implementation from `source/xposed-api82` instead (see
+  `source/xposed-api82/PROVENANCE.md`). Its Java dispatcher supplies callback priority/order,
+  before/after semantics, `hookMethod`, `hookAllMethods`, `hookAllConstructors`, callback removal
+  on `Unhook`, `XC_LoadPackage` and `IXposedHook*` types, and `XposedHelpers`.
 - `invokeOriginalMethodNative` calls the LSPlant backup method retained by `HookRuntime`. For ordinary instance methods, the receiver is passed as the reflective invocation receiver; static methods use a null receiver. Constructor behavior still requires device-level validation.
 
 ## Build
@@ -27,9 +33,23 @@ PAYLOAD_APK=source/app/build/outputs/apk/debug/app-debug.apk \
 
 The packaging script requires an explicit APK and records its kind and SHA-256 in `payload.info`. `PAYLOAD_KIND=original` is accepted only when the APK SHA-256 exactly matches the uploaded attachment; it never fabricates or mislabels a payload. The CI workflow builds the source-rebuilt debug APK; that APK is not byte-identical to the uploaded original.
 
+## Source-level checks
+
+```sh
+JAVA_HOME=/path/to/jdk ANDROID_JAR=/path/to/android.jar \
+  source/zygisk/tests/verify_local_port.sh
+```
+
+This compiles the port package and the vendored API 82 implementation, runs the unit tests and
+re-checks the JNI registration table, the vendored upstream sources, the pinned OpenSSL archives
+and the packaging-script refusals. It needs a JDK and a public `android.jar`; the full Gradle
+build still belongs to CI.
+
 ## Current limits
 
-- Full `XResources`/`XModuleResources` replacement and package-resource callbacks are not implemented.
+- Full `XResources`/`XModuleResources` replacement and package-resource callbacks are not
+  implemented; the vendored API keeps the upstream classes so the payload still links, but the
+  resource substitution paths are unreachable in this port.
 - `setObjectClass` and `cloneToSubclass` are explicitly unsupported. File-before-fork hooks are no-ops in an already-specialized app process.
 - Constructor original-method invocation, Tinker loader replacement, ART symbol resolution, and both ARM ABIs need real QQ/TIM device tests across Android versions.
 - The original chat attachment is not present in the remote ProductOS project. No ZIP built from this repository may be described as containing the original APK until the exact bytes are supplied as `PAYLOAD_APK`.
