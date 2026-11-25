@@ -63,6 +63,17 @@ jobject system_loader(JNIEnv *env) {
     return get_system ? env->CallStaticObjectMethod(loader_class, get_system) : nullptr;
 }
 
+class ScopedLocalFrame {
+public:
+    ScopedLocalFrame(JNIEnv *env, jint capacity) : env_(env), valid_(env_ != nullptr
+            && env_->PushLocalFrame(capacity) == JNI_OK) {}
+    ~ScopedLocalFrame() { if (valid_) env_->PopLocalFrame(nullptr); }
+    bool valid() const { return valid_; }
+private:
+    JNIEnv *env_;
+    bool valid_;
+};
+
 class XAutoDaily final : public zygisk::ModuleBase {
 public:
     void onLoad(zygisk::Api *api, JNIEnv *env) override { api_ = api; env_ = env; }
@@ -87,8 +98,22 @@ public:
 
     void postAppSpecialize(const zygisk::AppSpecializeArgs *) override {
         if (!enabled_ || payload_fd_ < 0) return;
+        ScopedLocalFrame local_frame(env_, 64);
+        if (!local_frame.valid()) {
+            if (env_->ExceptionCheck()) env_->ExceptionClear();
+            LOGE("could not allocate JNI local-reference frame");
+            close(payload_fd_); payload_fd_ = -1; return;
+        }
         std::string cache = app_data_ + "/code_cache";
-        mkdir(cache.c_str(), 0700);
+        if (mkdir(cache.c_str(), 0700) != 0 && errno != EEXIST) {
+            LOGE("cannot create code_cache: %s", strerror(errno));
+            close(payload_fd_); payload_fd_ = -1; return;
+        }
+        const std::string initial_lib_dir = cache + "/lib";
+        if (mkdir(initial_lib_dir.c_str(), 0700) != 0 && errno != EEXIST) {
+            LOGE("cannot create bootstrap lib dir: %s", strerror(errno));
+            close(payload_fd_); payload_fd_ = -1; return;
+        }
         std::string apk = cache + "/xautodaily-payload.apk";
         if (!copy_payload(payload_fd_, apk)) {
             LOGE("payload staging failed: %s", strerror(errno));
@@ -110,14 +135,19 @@ public:
         if (!ctor) { env_->ExceptionClear(); return; }
         jstring dex_path = env_->NewStringUTF(apk.c_str());
         jstring opt = env_->NewStringUTF(cache.c_str());
-        jstring libs = env_->NewStringUTF((cache + "/lib").c_str());
+        jstring libs = env_->NewStringUTF(initial_lib_dir.c_str());
+        if (!dex_path || !opt || !libs || env_->ExceptionCheck()) {
+            env_->ExceptionClear(); LOGE("could not allocate bootstrap path strings"); return;
+        }
         jobject loader = env_->NewObject(dex, ctor, dex_path, opt, libs, parent);
         if (!loader || env_->ExceptionCheck()) {
             env_->ExceptionClear(); LOGE("bootstrap DexClassLoader creation failed"); return;
         }
         jmethodID load = env_->GetMethodID(dex, "loadClass",
             "(Ljava/lang/String;)Ljava/lang/Class;");
+        if (!load) { env_->ExceptionClear(); LOGE("DexClassLoader.loadClass unavailable"); return; }
         jstring name = env_->NewStringUTF(kBootstrap);
+        if (!name) { env_->ExceptionClear(); LOGE("could not allocate bootstrap class name"); return; }
         jobject klass = env_->CallObjectMethod(loader, load, name);
         if (!klass || env_->ExceptionCheck()) {
             env_->ExceptionClear(); LOGE("Bootstrap class not found in payload"); return;
@@ -127,6 +157,9 @@ public:
         if (!start) { env_->ExceptionClear(); LOGE("Bootstrap.start signature missing"); return; }
         jstring pkg = env_->NewStringUTF(has_process_prefix(process_, kQQ) ? kQQ : kTIM);
         jstring proc = env_->NewStringUTF(process_.c_str());
+        if (!pkg || !proc || env_->ExceptionCheck()) {
+            env_->ExceptionClear(); LOGE("could not allocate process identity strings"); return;
+        }
         env_->CallStaticVoidMethod(static_cast<jclass>(klass), start, dex_path, pkg, proc);
         if (env_->ExceptionCheck()) {
             env_->ExceptionDescribe(); env_->ExceptionClear(); LOGE("Bootstrap.start failed");

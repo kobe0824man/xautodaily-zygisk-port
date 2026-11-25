@@ -304,11 +304,13 @@ void JNICALL native_hook_method(JNIEnv *env, jclass, jobject member, jclass, jin
     }
 
     jclass runtime_class = env->FindClass("me/teble/xposed/autodaily/zygisk/HookRuntime");
-    if (runtime_class == nullptr) return;
+    if (runtime_class == nullptr) { env->DeleteGlobalRef(backup); return; }
     jmethodID register_backup = env->GetStaticMethodID(runtime_class, "registerBackup",
             "(Ljava/lang/reflect/Member;Ljava/lang/reflect/Method;)V");
-    if (register_backup == nullptr) return;
+    if (register_backup == nullptr) { env->DeleteGlobalRef(backup); return; }
     env->CallStaticVoidMethod(runtime_class, register_backup, member, backup);
+    // LSPlant returns a global reference. HookRuntime now owns a Java reference in its map.
+    env->DeleteGlobalRef(backup);
 }
 
 jobject JNICALL native_invoke_original(JNIEnv *env, jclass, jobject member, jint,
